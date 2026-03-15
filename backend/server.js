@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize Firebase Admin SDK for FCM
 try {
-    const serviceAccountPath = path.join(__dirname, '..', 'api', 'sidneymailer-firebase-adminsdk-fbsvc-727f67b825.json');
+    const serviceAccountPath = path.join(__dirname, '..', 'api', 'changeover-app.json');
 
     let serviceAccount = null;
 
