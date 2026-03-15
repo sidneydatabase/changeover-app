@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Changeover Portal — What We Did, Why & How</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        :root {
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --brand: #0ea5e9;
+            --brand-dark: #0284c7;
+            --accent: #6366f1;
+            --how-bg: #f0fdf4;
+            --how-border: #86efac;
+            --how-accent: #16a34a;
+            --section-gap: 3rem;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ─── Print Styles ─── */
+        @media print {
+            body { background: #fff; font-size: 11pt; }
+            .page-break { page-break-before: always; }
+            .container { max-width: 100%; padding: 0 1cm; }
+            .how-block { break-inside: avoid; }
+            header { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+
+        /* ─── Header ─── */
+        header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            font-size: 0.95rem;
+            opacity: 0.7;
+            font-weight: 400;
+        }
+
+        /* ─── Container ─── */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+        }
+
+        /* ─── Section ─── */
+        section {
+            margin-bottom: var(--section-gap);
+        }
+
+        section > h2 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        section > h2 .num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: var(--brand);
+            color: white;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* ─── What/Why Block ─── */
+        .what-block {
+            background: var(--surface);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .what-block p,
+        .what-block li {
+            font-size: 0.95rem;
+            color: #334155;
+            margin-bottom: 1rem;
+        }
+
+        .what-block ul,
+        .what-block ol {
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .what-block li {
+            margin-bottom: 0.5rem;
+        }
+
+        .what-block strong {
+            color: var(--text);
+        }
+
+        /* ─── Conclusion Block ─── */
+        .conclusion-block {
+            background: linear-gradient(to right bottom, #ebf8ff, #ffffff);
+            border: 1px solid #bae6fd;
+            border-left: 4px solid #0ea5e9;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+        
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>Production Changeover Portal</h1>
+        <p>Comprehensive Process Map & Operational Impact</p>
+    </header>
+
+    <div class="container">
+
+        <!-- SECTION 1 -->
+        <section>
+            <h2><span class="num">1</span> Real-time Planning Portal</h2>
+            <div class="what-block">
+                <p>Due to the absence of real-time updates from the Planning Department, the 3 month production plan served as the primary reference for all departments. However, this document required time to be updated and circulated, and since it was typically revised only when significant timeline changes accumulated, individual style or schedule modifications were often not reflected immediately. This resulted in delays in communication and coordination between departments dependent on production planning.</p>
+                <p>To address this gap, a <strong>real-time planning portal</strong> was developed to allow the Planning Department to directly update production changeovers as they occur. The system includes a <strong>Schedule Page</strong> and a <strong>Calendar Page</strong>, enabling all departments to view and cross-verify changeover timelines in real time. If a delay occurs—for example due to recuts or unfinished line WIP—the planner can immediately update the changeover schedule, and the revised timeline becomes instantly visible to all departments through the shared calendar interface.</p>
+                <p>The portal also initiates the <strong>changeover communication workflow</strong>. When the Planning Department schedules a changeover for a production line, the planner enters the current style, upcoming style, and the planned date and time of changeover into the system. Based on this information, the system automatically schedules an email notification to relevant departments four days prior to the planned changeover, ensuring adequate preparation time while preventing an overload of emails when multiple changeovers are entered simultaneously.</p>
+                <p>If the changeover schedule is modified, the system automatically generates a follow-up email notification reflecting the updated timeline, ensuring that all departments remain informed without requiring manual intervention.</p>
+                <p>To further improve accessibility, the calendar was also deployed as an <strong>Android APK application</strong>, allowing native push notifications to be delivered directly to users’ mobile devices. For iOS users, the system operates as a <strong>Progressive Web App (PWA)</strong> and uses <strong>Firebase Cloud Messaging</strong> to send browser-based notifications. This ensures that changeover updates and alerts are communicated promptly across devices.</p>
+                <p>Through this system, the dependency on repeatedly updating planning files and manually sending emails is significantly reduced, while ensuring that all departments remain synchronized with the latest production schedule.</p>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+                    <p style="margin-bottom: 0;"><strong>🛠️ How it works natively:</strong> Built on a Firebase Cloud Firestore NoSQL backend for real-time data syncing. Uses Nodemailer via an Express.js server for scheduled email routing. The PWA utilizes Service Workers and Firebase Cloud Messaging (FCM) for push notifications across Android (APK via TWA) and browser platforms.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2 -->
+        <section class="page-break">
+            <h2><span class="num">2</span> Changeover Checklist System</h2>
+            <div class="what-block">
+                <p>After a changeover is scheduled by the Planning Department, it is essential to ensure that all prerequisite requirements across departments are completed before the changeover begins. If critical prerequisites are missing, the changeover process may face delays during execution. To address this issue, a structured <strong>Changeover Checklist System</strong> was developed to monitor and ensure preparedness across all departments.</p>
+                <p>The system consists of two types of checklists: a <strong>Master Checklist</strong> and <strong>Department-wise Checklists</strong>.</p>
+                <p>The Master Checklist is managed by the Manufacturing Excellence (MEX) team, which oversees the completion status of checklist items across all departments. This interface provides a consolidated view of overall preparedness for each scheduled changeover. If the cumulative completion status of all departmental checklists falls below 90%, the system records the progress of each department and automatically generates an alert email 42 hours before the scheduled changeover. This email summarizes the overall completion percentage and highlights the progress status of each department, indicating which departments have completed their tasks and which still have pending items. The automated notification ensures that all departments are reminded in advance and can prioritize the remaining preparations required for the upcoming changeover.</p>
+                <p>In addition to the master monitoring system, department-wise checklists are provided to each department through a secure login with department-specific credentials. Departments can identify their upcoming changeovers either through the automated email notifications or by referring to the Changeover Calendar within the system. Once identified, departments can access the relevant checklist and update the status of individual checklist items. They also have the option to include remarks or observations for specific items, which can later be referenced during the changeover review discussions.</p>
+                <p>This cross-department checklist framework ensures continuous visibility of preparation status and reinforces the responsibility of each department to complete their prerequisites in advance, thereby minimizing the risk of delays during the changeover process.</p>
+                <p>Furthermore, the checklist data serves as the foundation for a <strong>Changeover Review Meeting</strong> conducted one day prior to the scheduled changeover. During this meeting, representatives from relevant departments review the checklist completion status and discuss operational aspects such as production logistics, quality-critical points, special machine requirements, line WIP status for the outgoing style, manpower allocation, and any other potential risks that may affect the changeover. Conducting this meeting shortly before the changeover ensures that all outstanding issues are identified and addressed in advance.</p>
+                <p>To streamline documentation and communication, a standardized format for recording <strong>Changeover Meeting Minutes</strong> was also developed. This format captures the key discussions, decisions made, responsibilities assigned, and pending actions identified during the meeting. The standardized documentation enables clear communication across departments and ensures consistent record-keeping for all changeover meetings.</p>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+                    <p style="margin-bottom: 0;"><strong>🛠️ How it works natively:</strong> The checking threshold (90%) and 42-hour alerts are evaluated dynamically using Firestore listeners (<code>onSnapshot</code>). Department-specific access is secured via Firebase Authentication, with data structured in separate collections for master and departmental states.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3 -->
+        <section class="page-break">
+            <h2><span class="num">3</span> IE Preparations & Machine Requirement List</h2>
+            <div class="what-block">
+                <p>Parallel to the completion of departmental checklists, the Industrial Engineering (IE) department prepares for the upcoming changeover by uploading the <strong>Operation Bulletins (OBs)</strong> of both the current style and the upcoming style into the creation portal of the Progressive Web Application (PWA). The system extracts key parameters from the OB, including the list of operations, Standard Minute Value (SMV), machines allocated for each operation, and the number of operators and machines required per operation.</p>
+                <p>Using this information, the system performs a comparative analysis between the current style OB and the upcoming style OB to generate a <strong>machine requirement list</strong> for the changeover. This comparison identifies which machines are already present on the line and which additional machines will be required for the incoming style.</p>
+                <p>Initially, the costing OB was used to estimate machine requirements. However, costing OBs often do not reflect the latest production-level modifications such as operation splits, operation clubbing, or resequencing. This frequently resulted in inaccurate machine planning, where either fewer machines than required were requested or excess machines were arranged but remained unused. By shifting to the updated production OB, the system ensures a more accurate representation of the actual operations being executed on the line, thereby improving the reliability of machine requirement calculations.</p>
+                <p>Once the machine comparison analysis is generated, the IE department circulates the machine requirement report via email to all stakeholders involved in the changeover, including the Maintenance Department. Providing this information in advance enables the maintenance team to plan the availability of machines required for the upcoming style.</p>
+                <p>Due to limited machine surplus within the factory, it is not currently feasible to set up an entire production line externally before the changeover. Most machines already installed on the line continue to be used until the final stage of the previous style’s production. However, the advance machine requirement information allows the maintenance team to prepare and preset the additional machines that will be introduced during the changeover. This preparation reduces the time required for machine setup on the production line and helps minimize delays during the transition to the new style.</p>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+                    <p style="margin-bottom: 0;"><strong>🛠️ How it works natively:</strong> Operation Bulletins (OBs) in CSV format are parsed client-side using the <code>PapaParse</code> library. The JavaScript logic iterates through the required machines per operation, mapping them against the active line's equipment to calculate the net delta (shortage/surplus), which is then saved to the QCO document.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4 -->
+        <section class="page-break">
+            <h2><span class="num">4</span> Digital Changeover Recording System</h2>
+            <div class="what-block">
+                <p>After the changeover is scheduled, the relevant OBs are uploaded, and departmental checklists are followed up, the next stage involves recording and monitoring the changeover process during execution.</p>
+                <p>Previously, changeovers were recorded manually by IE executives using pen and paper. This approach created several limitations. The visibility of the changeover was restricted only to the individual recording the data, and the absence or misplacement of the recording sheet meant that there was no reliable record of the process. Additionally, it was difficult to accurately track which department contributed to delays, the duration of each activity, or the financial impact of the lost time. Break times were not properly accounted for, and the overall analysis required complex manual calculations with multiple assumptions, making the process inefficient and inconsistent.</p>
+                <p>An initial attempt to digitize the process using Microsoft Excel was explored. However, this approach still required extensive manual data entry and the preparation of reports after each changeover. Furthermore, only the person updating the file had visibility of the changeover progress, and corrective actions could only be taken after the reports were generated, often by the end of the day. This delayed feedback limited the ability to address issues during the changeover itself.</p>
+                <p>To overcome these limitations, a <strong>digital changeover recording system</strong> was developed within the PWA. The system allows changeovers to be recorded through a simplified interface consisting of four primary inputs: Start, Stop, Department Responsible, and Remarks. Since the operations from the OB are already integrated into the system, users do not need to manually enter operation names during recording. This significantly reduces the amount of data entry required and ensures consistency in operation tracking.</p>
+                <p>The simplified interface was intentionally designed to minimize complexity, enabling not only IE personnel but also supervisors and line in-charges to operate the system after minimal training. At the same time, the system automatically handles complex calculations such as break time adjustments, total changeover duration, and departmental loss attribution. A <strong>loss-time report</strong> is generated simultaneously during recording, eliminating the need for separate report preparation after the changeover.</p>
+                <p>The system includes three different recording modes to accommodate various operational scenarios:</p>
+                <ul>
+                    <li><strong>Admin Recorder:</strong> Includes the standard recording interface with the four primary inputs, along with the ability to edit recorded timings in case corrections are required.</li>
+                    <li><strong>Field Recorder:</strong> Provides the same recording interface but without editing permissions, ensuring that field staff cannot manipulate the recorded timings once entered.</li>
+                    <li><strong>Instant Changeover Recorder:</strong> Designed for unplanned or unscheduled changeovers, such as layout adjustments or operational changes that may occur outside the official planning schedule.</li>
+                </ul>
+                <p>All three recording modes use the same data structure, allowing them to generate standardized reports regardless of the recorder used. In addition, the system includes a <strong>Live Changeover Monitor</strong>, which displays the real-time progress of ongoing changeovers. This dashboard allows management and relevant departments to observe the current status, time losses, departmental responsibilities, and recorded remarks for each operation as the changeover progresses. The real-time visibility enables immediate intervention and corrective action, improving responsiveness and overall changeover efficiency.</p>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+                    <p style="margin-bottom: 0;"><strong>🛠️ How it works natively:</strong> The recording interface uses JavaScript event listeners attached to the active Firebase document. The three modes (Admin, Field, Instant) are controlled via role-based access control (RBAC) in the frontend. Timestamps are captured using <code>Date.now()</code> and synced precisely with Firestore server timestamps to prevent local clock manipulation.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5 -->
+        <section class="page-break">
+            <h2><span class="num">5</span> Centralized Reporting System</h2>
+            <div class="what-block">
+                <p>Earlier, the reporting system relied on individual Excel sheets that primarily generated Loss Time Breakdown and Department-wise Loss Analysis for each recorded changeover. While these reports provided useful insights at a micro level, they were limited to the specific Excel file in which the data was recorded. This meant there was no centralized view of changeover performance across multiple lines, time periods, or production units, making it difficult for management to analyze broader operational trends or identify recurring inefficiencies.</p>
+                <p>To address this limitation, a <strong>centralized reporting system</strong> was developed within the digital changeover management platform. This system consolidates data from all recorded changeovers and generates comprehensive analytical reports that provide both operational and financial insights.</p>
+                <p>The centralized dashboard enables users to view and analyze multiple parameters, including <strong>Loss Time Breakdown</strong>, <strong>Department-wise Loss Distribution</strong>, <strong>Total Cost Impact</strong> with cost component breakdowns, <strong>SMV Multiple Analysis</strong>, and <strong>Cost Parameters</strong> associated with changeover delays.</p>
+                <p>In addition, the system highlights <strong>Top 5 Loss Time Contributors</strong>, allowing management to quickly identify the most significant sources of inefficiency. The reporting module also supports <strong>Line-wise Analysis</strong>, <strong>Time-period based performance analysis</strong>, and <strong>Single Quick Changeover (QCO) evaluations</strong> for individual production lines. By consolidating all changeover data into a single reporting interface, the system enables management to track performance trends, compare line efficiencies, and make more informed decisions aimed at reducing changeover losses and improving operational efficiency.</p>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+                    <p style="margin-bottom: 0;"><strong>🛠️ How it works natively:</strong> Analytics are rendered using <code>Chart.js</code> for visual data representation (Loss Time Breakdown, Department Loss). The SMV Multiple and cost calculations are computed dynamically in JavaScript by factoring the total recorded time against the Target SMV and the user-input Cost/Manpower parameters.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 6 -->
+        <section class="page-break">
+            <h2><span class="num">6</span> Style Repository & Planning Sheet Module</h2>
+            <div class="what-block">
+                <p>In addition to the operational modules, the system also includes a <strong>Style Repository</strong> and a <strong>Planning Sheet Module</strong> to support data organization and future reference.</p>
+                <p>The <strong>Style Repository</strong> functions as a centralized database where every unique style handled by the factory is recorded. This repository allows users to retrieve historical information related to past changeovers, including changeover overviews, style comparisons, daily efficiency data, and machine analysis reports. By maintaining a structured archive of styles and their associated changeover data, the system enables departments to review previous transitions and use these insights to better plan future changeovers.</p>
+                <p>Complementing this repository is the <strong>Planning Sheet Module</strong>, which integrates the factory’s 90-day production planning sheet into the system. Based on this planning data, the module analyzes the production sequence and provides automated suggestions on the Schedule Page regarding potential changeover timings. The Planning Department can then review these recommendations and either proceed with the suggested schedule or manually create and schedule a changeover if adjustments are required.</p>
+                <p>This integration between the planning sheet and the scheduling interface helps streamline the transition from long-term production planning to actionable changeover scheduling, improving planning accuracy and operational coordination across departments.</p>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+                    <p style="margin-bottom: 0;"><strong>🛠️ How it works natively:</strong> The Planning Sheet integration reads from an exported data file and populates a Select2 dropdown interface. The style archival system querying relies on structured Firestore indices executing fast prefix and combination searches.</p>
+                </div>
+            </div>
+        </section>
+        <!-- SECTION 7: TECHNICAL ARCHITECTURE -->
+        <section class="page-break">
+            <h2><span class="num">7</span> Technical Architecture & Module Breakdown</h2>
+            <div class="what-block">
+                <p>The Production Changeover Portal relies on a modern, decoupled web architecture specifically optimized for real-time synchronization across an apparel manufacturing floor. The ecosystem is split into a client-facing Progressive Web App and a serverless automation backend.</p>
+                
+                <h3>Frontend Architecture</h3>
+                <p>The client interface is constructed as a <strong>Progressive Web App (PWA)</strong> utilizing Vanilla JavaScript, HTML5, and TailwindCSS for responsive styling. It incorporates GSAP for scroll-driven animations and the Lucide icon library. To ensure zero-latency interactions in restricted network zones, the application is wrapped with a Service Worker logic that enforces stale-while-revalidate caching and provides installability via a `manifest.json`. The PWA is also compiled into a Trusted Web Activity (TWA) to deploy as an Android APK for factory floor tablets.</p>
+
+                <h3>Backend Architecture</h3>
+                <p>The core data layer is driven by <strong>Firebase Cloud Firestore</strong>, a NoSQL database configured for WebSocket-based real-time <code>onSnapshot</code> syncing, bringing latency down to milliseconds natively. Authentication is managed securely via Firebase Auth.</p>
+                <p>To handle automation, the stack uses a <strong>Node.js Express backend</strong> deployed onto the Vercel architecture as Serverless Functions. The Backend is secured via strict CORS origin whitelisting and <code>express-rate-limit</code> middleware. It integrates the <strong>Firebase Admin SDK</strong> to transmit Firebase Cloud Messaging (FCM) notifications securely. Additionally, it features a Dual-SMTP routing configuration using <strong>Nodemailer</strong> to segregate automated reports depending on the triggering department, incorporating <strong>Multer</strong> memory storage to securely process and buffer large PDF/Excel attachments directly in ephemeral memory before email transmission.</p>
+
+                <h3>Application Module Breakdown (Page-by-Page)</h3>
+                <ul>
+                    <li><strong>Creation & Planning Modules (<code>creation.html</code> & <code>planning.html</code>):</strong> Functions as the ingestion layer. Uses integration with the Select2 library for high-speed dropdowns and parses CSV Operation Bulletins completely client-side. Validated payloads then trigger the Node.js backend to broadcast initial QCO email alerts.</li>
+                    <li><strong>Real-Time Schedule (<code>schedule.html</code>):</strong> A global chronological view parsing active Firestore documents to calculate overlap math natively, syncing expected production timelines dynamically across all users without blocking the main DOM thread.</li>
+                    <li><strong>Departmental Checklist (<code>checklist.html</code>):</strong> Features a localized password-gating UI authenticating individual departments. Relies on deeply nested NoSQL object parameters to store and track specific boolean sign-offs while evaluating threshold tolerances in real time.</li>
+                    <li><strong>Digital Recorder (<code>recorder.html</code>):</strong> The chronological execution engine. Inputs are strictly time-locked using <code>Date.now()</code> arrays that sync simultaneously with <code>Firestore ServerTimestamp</code> values, ensuring immutable event logging against device manipulation.</li>
+                    <li><strong>Live Monitor (<code>dashboard.html</code>):</strong> The central observatory hub. Employs complex JavaScript algorithms to ingest raw Firestore timestamp arrays, transforming them into smoothly calculating visual progress bars, status indicators, and loss highlights.</li>
+                    <li><strong>Reporting & Analytics (<code>summary.html</code>):</strong> The retrospective analysis engine. Pulls historical multi-line query data using optimized Firestore compound indices. Renders visual comparisons utilizing <code>Chart.js</code> and pipes raw DOM HTML strings to the backend for automated Node.js PDF exportation.</li>
+                    <li><strong>Style Repository (<code>style.html</code>):</strong> Functions as a NoSQL data warehouse storing precise garment configurations. Manages thousands of historical records utilizing optimized query structures mapping unique garment types back to previously executed QCO history blocks.</li>
+                </ul>
+            </div>
+        </section>
+        
+        <!-- CONCLUSION -->
+        <section class="page-break">
+            <h2><span class="num">🏁</span> Impact & Standard Operating Procedure</h2>
+            <div class="conclusion-block">
+                <p>Prior to the implementation of this system, there was no defined Standard Operating Procedure (SOP) for managing changeovers, resulting in inconsistent execution and significant inefficiencies. The initial changeovers recorded during the early phase of observation showed an average changeover duration of approximately <strong>63× SMV multiples</strong>, indicating substantial time losses and operational delays during line transitions.</p>
+                <p>Following the implementation of the digital changeover management system and structured monitoring framework, a noticeable reduction in changeover time was observed. In several instances, changeovers were completed in as low as <strong>29× SMV multiples</strong>, which represents nearly a <strong>50% reduction</strong> compared to the earlier recorded averages. This improvement highlights the positive impact of structured scheduling, real-time monitoring, and better cross-departmental coordination introduced through the system.</p>
+                <p>However, certain operational challenges continue to contribute to changeover delays. These include situations where line production targets and Work-in-Progress (WIP) for the outgoing style are not completed on time, which prevents timely operator reallocation to the upcoming style. Additionally, machine availability can be constrained when equipment remains occupied on other lines attempting to complete their WIP, delaying the preparation of machines for the incoming style. Schedule disruptions caused by recuts also lead to cascading delays, affecting both the planned changeover timeline and the production readiness of subsequent styles.</p>
+                <p>These observations indicate that while the digital system has significantly improved visibility and coordination, further operational discipline and adherence to production targets are required to consistently achieve optimal changeover performance.</p>
+            </div>
+        </section>
+
+    </div>
+
+</body>
+
+</html>

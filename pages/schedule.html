@@ -1192,9 +1192,9 @@
         let allChangeovers = [];
 
         const firebaseConfig = {
-            apiKey: "AIzaSyAdWYiRQFGsmPWbQ_AOm2aGvf1GDHjsqiY",
-            authDomain: "sidneymailer.firebaseapp.com",
-            projectId: "sidneymailer",
+            apiKey: "AIzaSyC9Ri2Je52C1D6xYqH9mo-zT5Wuhd_akX8",
+            authDomain: "changeover-app.firebaseapp.com",
+            projectId: "changeover-app",
             storageBucket: "sidneymailer.appspot.com",
             messagingSenderId: "867498417076",
             appId: "1:867498417076:web:54da9eb9eb5f2d44e24bbb"
@@ -1396,6 +1396,27 @@
                 }
                 sel.appendChild(opt);
             });
+        }
+
+        // ==========================================
+        // QCO LOADER INITIALIZATION
+        // ==========================================
+        function initQCOLoader() {
+            if (typeof QCOLoader !== 'undefined') {
+                window.qcoLoader = new QCOLoader({
+                    selectElementId: 'qcoSelector',
+                    searchInputId: 'qcoSearch',
+                    supervisorSelectId: 'supervisorFilter',
+                    pageSize: 30,
+                    onSelect: (qcoId) => {
+                        if (typeof handleQCOChange === 'function') {
+                            handleQCOChange(qcoId);
+                        }
+                    }
+                });
+            } else {
+                console.error("QCOLoader class not found! Ensure qco-loader.js is loaded.");
+            }
         }
 
         // ==========================================
