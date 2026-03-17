@@ -600,6 +600,10 @@
                     <h1 class="font-heading font-bold text-slate-800 text-sm tracking-wide">Changeover Calendar</h1>
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Monthly Overview</p>
                 </div>
+                <button onclick="loadMonth()"
+                    class="ml-2 px-3 py-1.5 bg-slate-100 text-violet-600 rounded-xl hover:bg-slate-200 transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold desktop-controls">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+                </button>
             </div>
 
             <!-- Desktop controls (hidden on mobile via CSS) -->
@@ -649,16 +653,21 @@
 
             <!-- Mobile Row 2: Search bar (full width, own line) -->
             <div class="md:hidden flex items-center gap-2 w-full">
-                <div class="relative flex-1">
-                    <i data-lucide="search"
-                        class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5"></i>
-                    <input type="text" id="qcoSearchInputMobile" placeholder="Search QCO..."
-                        class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
-                        onkeydown="if(event.key==='Enter') searchQCOMobile()">
-                </div>
-                <button onclick="searchQCOMobile()"
-                    class="p-2.5 bg-violet-600 text-white rounded-xl active:scale-95 flex items-center justify-center flex-shrink-0 shadow-sm"
-                    style="min-height:40px;min-width:40px;">
+                <button onclick="loadMonth()"
+                class="p-2.5 bg-slate-100 text-violet-600 rounded-xl active:scale-95 flex items-center justify-center flex-shrink-0"
+                style="min-height:40px;min-width:40px;">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+            <div class="relative flex-1">
+                <i data-lucide="search"
+                    class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5"></i>
+                <input type="text" id="qcoSearchInputMobile" placeholder="Search QCO..."
+                    class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                    onkeydown="if(event.key==='Enter') searchQCOMobile()">
+            </div>
+            <button onclick="searchQCOMobile()"
+                class="p-2.5 bg-violet-600 text-white rounded-xl active:scale-95 flex items-center justify-center flex-shrink-0 shadow-sm"
+                style="min-height:40px;min-width:40px;">
                     <i data-lucide="search" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -681,6 +690,10 @@
 
         <!-- Scrollable Content -->
         <div id="appContent" class="flex-1 relative overflow-y-auto">
+            <!-- Offline Banner -->
+            <div id="offlineBanner" class="hidden w-full bg-red-50 text-red-600 text-center py-1.5 text-[11px] font-bold tracking-wide">
+                You are offline. Showing cached data.
+            </div>
             <div id="mainApp" class="flex flex-col pt-6 pb-32 px-4 md:px-6 opacity-0" style="min-height:100%">
                 <div class="max-w-[1400px] mx-auto w-full flex flex-col flex-1">
 
@@ -697,6 +710,10 @@
                             class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors shadow-sm">
                             <i data-lucide="chevron-right" class="w-5 h-5 text-slate-600"></i>
                         </button>
+                    <button onclick="goToToday()" title="Go to Today"
+                        class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors shadow-sm">
+                        <i data-lucide="calendar-heart" class="w-[18px] h-[18px] text-slate-600"></i>
+                    </button>
                     </div>
 
                     <!-- Metrics Row -->
@@ -863,9 +880,9 @@
             apiKey: "AIzaSyC9Ri2Je52C1D6xYqH9mo-zT5Wuhd_akX8",
             authDomain: "changeover-app.firebaseapp.com",
             projectId: "changeover-app",
-            storageBucket: "sidneymailer.appspot.com",
-            messagingSenderId: "867498417076",
-            appId: "1:867498417076:web:54da9eb9eb5f2d44e24bbb"
+            storageBucket: "changeover-app.firebasestorage.app",
+            messagingSenderId: "690912562852",
+            appId: "1:690912562852:web:80404067e684babbc4e031"
         };
 
         // ==========================================
@@ -951,12 +968,36 @@
             if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
 
+            // Enable Firestore offline persistence (matches Flutter app's persistenceEnabled: true)
+            db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+                if (err.code === 'failed-precondition') {
+                    console.warn('Persistence failed: multiple tabs open');
+                } else if (err.code === 'unimplemented') {
+                    console.warn('Persistence not supported in this browser');
+                }
+            });
+
             const now = new Date();
             currentYear = now.getFullYear();
             currentMonth = now.getMonth();
 
             loadMonth();
             lucide.createIcons();
+
+            // Offline detection
+            function updateOnlineStatus() {
+                const banner = document.getElementById('offlineBanner');
+                if (banner) {
+                    if (navigator.onLine) {
+                        banner.classList.add('hidden');
+                    } else {
+                        banner.classList.remove('hidden');
+                    }
+                }
+            }
+            window.addEventListener('online', () => { updateOnlineStatus(); loadMonth(); });
+            window.addEventListener('offline', updateOnlineStatus);
+            updateOnlineStatus();
         });
 
         // ==========================================
@@ -968,11 +1009,14 @@
             const startOfMonth = new Date(currentYear, currentMonth, 1);
             const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
 
+            // Use cache when offline, server when online (matches Flutter app)
+            const getOpts = navigator.onLine ? {} : { source: 'cache' };
+
             try {
                 const snapshot = await db.collection('changeovers')
                     .where('scheduledDate', '>=', startOfMonth.toISOString().slice(0, 10))
                     .where('scheduledDate', '<=', endOfMonth.toISOString().slice(0, 10) + 'T23:59')
-                    .get();
+                    .get(getOpts);
 
                 allChangeovers = [];
                 snapshot.forEach(doc => {
@@ -984,7 +1028,7 @@
                 console.error("Error loading changeovers:", e);
                 // Fallback: load ALL and filter client-side
                 try {
-                    const snapshot = await db.collection('changeovers').get();
+                    const snapshot = await db.collection('changeovers').get(getOpts);
                     allChangeovers = [];
                     snapshot.forEach(doc => {
                         const data = doc.data();
@@ -1361,6 +1405,13 @@
             loadMonth();
         }
 
+        function goToToday() {
+            const now = new Date();
+            currentYear = now.getFullYear();
+            currentMonth = now.getMonth();
+            loadMonth();
+        }
+
         // ==========================================
         // DAY MODAL
         // ==========================================
@@ -1387,7 +1438,21 @@
                     }
                 }
 
-                const supervisorName = (co.lineNumber && personnelData[co.lineNumber]) ? personnelData[co.lineNumber].supervisor : '—';
+                // Safe supervisor lookup for complex lines (e.g. 26+4, 6/17)
+                let supervisorName = '—';
+                if (co.lineNumber) {
+                    if (personnelData[co.lineNumber]) {
+                        supervisorName = personnelData[co.lineNumber].supervisor;
+                    } else if (explodedPersonnel[co.lineNumber]) {
+                        supervisorName = explodedPersonnel[co.lineNumber].supervisor;
+                    } else {
+                        // Try splitting the line number
+                        const parts = co.lineNumber.split(/[\+\/]/);
+                        if (parts.length > 0 && explodedPersonnel[parts[0].trim()]) {
+                            supervisorName = explodedPersonnel[parts[0].trim()].supervisor;
+                        }
+                    }
+                }
                 card.innerHTML = `
                     <div class="flex justify-between items-start mb-2">
                         <h4 class="font-heading font-bold text-violet-700 text-sm">${co.qcoNumber || co.id}</h4>
