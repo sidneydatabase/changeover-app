@@ -130,9 +130,87 @@
             background: rgba(255, 255, 255, 0.5);
         }
 
+        @page {
+            size: landscape;
+            margin: 10mm;
+        }
+
         @media print {
-            .no-print {
+            /* Hide non-content UI */
+            .no-print,
+            .retractable-sidebar,
+            .nav-backdrop,
+            .cursor-dot,
+            .cursor-outline,
+            #navBackdrop,
+            #appSidebar,
+            #appHeader,
+            footer {
                 display: none !important;
+            }
+
+            /* Remove viewport constraints so ALL content prints */
+            html, body {
+                height: auto !important;
+                overflow: visible !important;
+                background: white !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            #appShell {
+                height: auto !important;
+                overflow: visible !important;
+                display: block !important;
+            }
+
+            #appContent {
+                overflow: visible !important;
+                height: auto !important;
+                flex: none !important;
+            }
+
+            #mainApp {
+                opacity: 1 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                overflow: visible !important;
+            }
+
+            /* Remove decorative backgrounds */
+            .fixed.inset-0 {
+                display: none !important;
+            }
+
+            /* Let glass cards print cleanly */
+            .glass, .glass-card {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: white !important;
+                box-shadow: none !important;
+                border: 1px solid #e2e8f0 !important;
+                break-inside: avoid;
+            }
+
+            /* Charts should not break across pages */
+            .chart-container,
+            canvas {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            /* Ensure grids don't overflow */
+            .grid {
+                break-inside: avoid;
+            }
+
+            /* Tables print fully */
+            table {
+                break-inside: auto;
+            }
+            tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
             }
         }
 
