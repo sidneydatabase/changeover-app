@@ -1846,11 +1846,19 @@
             ['TRIMS', 'CUTTING', 'PRODUCTION', 'MERCHANDISER', 'IE', 'TECHNICAL', 'MAINTENANCE'].forEach(d => depts[d] = 0);
 
             // Sum durations
+            let recordedTime = 0;
             ops.forEach(op => {
                 const d = (op.dept || 'MAINTENANCE').toUpperCase();
                 // Map known deviations if any, or just use raw
                 depts[d] = (depts[d] || 0) + op.duration;
+                recordedTime += op.duration;
             });
+
+            // Add unrecorded time if there is a gap (idle time)
+            const unrecordedTime = Math.max(0, totalTime - recordedTime);
+            if (unrecordedTime > 0.1) { // >0.1 to avoid floating point noise from JS
+                depts['UNRECORDED'] = unrecordedTime;
+            }
 
             // Calculate Grid Data
             const gridData = Object.entries(depts).map(([dept, time]) => {
@@ -1996,7 +2004,8 @@
                 'PRODUCTION': 'bg-emerald-500',
                 'CUTTING': 'bg-blue-500',
                 'TRIMS': 'bg-violet-500',
-                'QUALITY': 'bg-amber-500'
+                'QUALITY': 'bg-amber-500',
+                'UNRECORDED': 'bg-slate-300'
             };
             return map[dept] || 'bg-slate-400';
         }
@@ -2012,7 +2021,8 @@
                 'TECHNICAL': '#a855f7',
                 'MERCHANDISER': '#ec4899',
                 'PLANNING': '#06b6d4',
-                'STORE': '#71717a'
+                'STORE': '#71717a',
+                'UNRECORDED': '#cbd5e1'
             };
             return map[dept] || '#94a3b8';
         }
