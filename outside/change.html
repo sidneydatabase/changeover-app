@@ -1350,29 +1350,50 @@
 
         // =====================================================
         //  LOSS TIME BREAKDOWN
+        //  (Aligned with summary.html: uses calculateWorkingHoursOnly
+        //   for each op, overall elapsed time as denominator,
+        //   and UNRECORDED row for idle time gap)
         // =====================================================
         function renderLossBreakdown(data) {
             const section = document.getElementById('lossBreakdownSection');
             const timings = data.operationTimings || {};
-            const ops = Object.entries(timings).filter(([, t]) => t.actualTime);
+            const completedOps = Object.entries(timings).filter(([, t]) => t.start && t.end);
 
-            if (ops.length === 0) {
+            if (completedOps.length === 0) {
                 section.classList.add('hidden');
                 return;
             }
 
             section.classList.remove('hidden');
 
-            // Department aggregation
+            // --- Calculate overall elapsed working time (same as renderTotalTime) ---
+            const starts = completedOps.map(([, t]) => new Date(t.start).getTime()).filter(t => !isNaN(t));
+            const ends = completedOps.map(([, t]) => new Date(t.end).getTime()).filter(t => !isNaN(t));
+            let overallTime = 0;
+            if (starts.length > 0 && ends.length > 0) {
+                overallTime = calculateWorkingHoursOnly(Math.min(...starts), Math.max(...ends));
+            }
+
+            // --- Department aggregation using calculateWorkingHoursOnly per operation ---
             const depts = {};
             ['TRIMS', 'CUTTING', 'PRODUCTION', 'MERCHANDISER', 'IE', 'TECHNICAL', 'MAINTENANCE'].forEach(d => depts[d] = 0);
 
-            ops.forEach(([name, details]) => {
+            let recordedTime = 0;
+            completedOps.forEach(([name, details]) => {
                 const d = (details.department || 'MAINTENANCE').toUpperCase();
-                depts[d] = (depts[d] || 0) + parseFloat(details.actualTime);
+                const opTime = calculateWorkingHoursOnly(details.start, details.end);
+                depts[d] = (depts[d] || 0) + opTime;
+                recordedTime += opTime;
             });
 
-            const totalTime = Object.values(depts).reduce((s, v) => s + v, 0);
+            // Add UNRECORDED row for idle time gap
+            const unrecordedTime = Math.max(0, overallTime - recordedTime);
+            if (unrecordedTime > 0.1) {
+                depts['UNRECORDED'] = unrecordedTime;
+            }
+
+            // Use overall elapsed time as denominator (matches summary.html)
+            const totalTime = overallTime > 0 ? overallTime : recordedTime;
 
             const gridData = Object.entries(depts).map(([dept, time]) => {
                 const share = totalTime > 0 ? (time / totalTime) * 100 : 0;
@@ -1411,7 +1432,8 @@
             const map = {
                 'MAINTENANCE': 'bg-rose-500', 'PRODUCTION': 'bg-emerald-500', 'CUTTING': 'bg-blue-500',
                 'TRIMS': 'bg-violet-500', 'QUALITY': 'bg-amber-500', 'IE': 'bg-indigo-500',
-                'TECHNICAL': 'bg-purple-500', 'MERCHANDISER': 'bg-pink-500'
+                'TECHNICAL': 'bg-purple-500', 'MERCHANDISER': 'bg-pink-500',
+                'UNRECORDED': 'bg-slate-300'
             };
             return map[dept] || 'bg-slate-400';
         }
