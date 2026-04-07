@@ -32,6 +32,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
     <script src="https://unpkg.com/lenis@1.1.2/dist/lenis.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -1317,6 +1318,12 @@
                                     <i data-lucide="calendar-clock" class="w-3.5 h-3.5"></i>
                                     <span>Custom</span>
                                 </button>
+                            </div>
+                            <!-- Month Picker (hidden, shown when Month filter is active) -->
+                            <div id="dashMonthPickerWrap" class="hidden">
+                                <input type="month" id="dashMonthPicker"
+                                    class="px-3 py-1.5 rounded-xl bg-white/60 border border-white/60 text-sm font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
+                                    onchange="applyMonthPicker()">
                             </div>
                             <div class="relative">
                                 <i data-lucide="search"
@@ -2781,6 +2788,95 @@
                     return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
                 }
 
+                // --- Bulk Export (Structured Excel) ---
+                function bulkExport() {
+                    if (!filteredChangeovers || filteredChangeovers.length === 0) {
+                        showToast('No data to export. Please adjust your filters.', 'error');
+                        return;
+                    }
+
+                    try {
+                        // Build structured rows
+                        const rows = filteredChangeovers.map(qco => {
+                            const status = deriveQCOStatus(qco);
+                            const createdDate = qco.createdAt
+                                ? (qco.createdAt.toDate ? qco.createdAt.toDate() : new Date(qco.createdAt))
+                                : null;
+
+                            // Calculate target COPT
+                            const smv = qco.upcomingSMV || qco.newStyleSMV || qco.upcomingStyleSMV || 0;
+                            const category = qco.changeoverCategory || 'C';
+                            const multipliers = { 'A': 7, 'B': 5, 'C': 3 };
+                            const targetCOPT = smv > 0 ? Math.round(smv * (multipliers[category] || 3)) : '';
+
+                            // Calculate actual COPT from operationTimings
+                            let actualCOPT = '';
+                            const timings = qco.operationTimings || {};
+                            const completedOps = Object.values(timings).filter(t => t.start && t.end);
+                            if (completedOps.length > 0) {
+                                const starts = completedOps.map(t => new Date(t.start).getTime()).filter(t => !isNaN(t));
+                                const ends = completedOps.map(t => new Date(t.end).getTime()).filter(t => !isNaN(t));
+                                if (starts.length > 0 && ends.length > 0) {
+                                    const totalMs = Math.max(...ends) - Math.min(...starts);
+                                    actualCOPT = Math.round(totalMs / 60000);
+                                }
+                            }
+
+                            // Count operations
+                            const totalOps = (qco.operationsList || Object.keys(timings)).length;
+                            const completedOpsCount = completedOps.length;
+
+                            // Department breakdown
+                            const deptTimes = {};
+                            completedOps.forEach(op => {
+                                const dept = (op.department || 'MAINTENANCE').toUpperCase();
+                                const dur = (op.start && op.end)
+                                    ? Math.round((new Date(op.end) - new Date(op.start)) / 60000)
+                                    : 0;
+                                deptTimes[dept] = (deptTimes[dept] || 0) + dur;
+                            });
+                            const deptSummary = Object.entries(deptTimes).map(([d, t]) => `${d}: ${t}m`).join(', ');
+
+                            return {
+                                'QCO Number': qco.qcoNumber || '',
+                                'Current Style': qco.currentStyle || '',
+                                'Upcoming Style': qco.upcomingStyle || '',
+                                'Line': qco.lineNumber || '',
+                                'Category': category,
+                                'Status': status,
+                                'Target COPT (min)': targetCOPT,
+                                'Actual COPT (min)': actualCOPT,
+                                'Manpower': qco.savedManpower || qco.allotedWP || '',
+                                'Operations (Done/Total)': `${completedOpsCount}/${totalOps}`,
+                                'Dept Breakdown': deptSummary,
+                                'Created Date': createdDate ? createdDate.toLocaleDateString('en-GB') : '',
+                                'Created Time': createdDate ? createdDate.toLocaleTimeString('en-US', { hour12: false }) : ''
+                            };
+                        });
+
+                        // Create workbook with SheetJS
+                        const ws = XLSX.utils.json_to_sheet(rows);
+
+                        // Auto-size columns
+                        const colWidths = Object.keys(rows[0]).map(key => ({
+                            wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length)) + 2
+                        }));
+                        ws['!cols'] = colWidths;
+
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, 'Changeovers');
+
+                        // Download
+                        const dateStr = new Date().toISOString().split('T')[0];
+                        XLSX.writeFile(wb, `QCO_Bulk_Export_${dateStr}.xlsx`);
+
+                        showToast(`Exported ${rows.length} changeovers to Excel`, 'success');
+                    } catch (error) {
+                        console.error('Bulk export error:', error);
+                        showToast('Error exporting data: ' + error.message, 'error');
+                    }
+                }
+
                 // --- UI Utilities ---
                 function showToast(message, type = 'info') {
                     const container = document.getElementById('toastContainer');
@@ -3359,6 +3455,13 @@
                             weekAgo.setDate(weekAgo.getDate() - 7);
                             return weekAgo;
                         case 'month':
+                            // Use month picker if available, otherwise last 30 days
+                            const dashMonthPicker = document.getElementById('dashMonthPicker');
+                            if (dashMonthPicker && dashMonthPicker.value) {
+                                const [y, m] = dashMonthPicker.value.split('-').map(Number);
+                                customDateEnd = new Date(y, m, 0, 23, 59, 59); // last day of month
+                                return new Date(y, m - 1, 1, 0, 0, 0);
+                            }
                             const monthAgo = new Date(now);
                             monthAgo.setMonth(monthAgo.getMonth() - 1);
                             return monthAgo;
@@ -4048,9 +4151,33 @@
                     document.querySelectorAll('.time-range-btn').forEach(btn => btn.classList.remove('active'));
                     const btn = document.getElementById(`range-${range}`);
                     if (btn) btn.classList.add('active');
+
+                    // Show/hide month picker
+                    const monthWrap = document.getElementById('dashMonthPickerWrap');
+                    if (range === 'month') {
+                        monthWrap.classList.remove('hidden');
+                        const picker = document.getElementById('dashMonthPicker');
+                        if (!picker.value) {
+                            const now = new Date();
+                            picker.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                        }
+                    } else {
+                        monthWrap.classList.add('hidden');
+                    }
+
                     lucide.createIcons();
 
                     // Refresh dashboard with new time filter
+                    currentPage = 1;
+                    applyCurrentFilters();
+                }
+
+                function applyMonthPicker() {
+                    // When user picks a specific month, treat it as a month filter
+                    currentTimeRange = 'month';
+                    document.querySelectorAll('.time-range-btn').forEach(btn => btn.classList.remove('active'));
+                    const btn = document.getElementById('range-month');
+                    if (btn) btn.classList.add('active');
                     currentPage = 1;
                     applyCurrentFilters();
                 }

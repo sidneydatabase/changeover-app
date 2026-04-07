@@ -749,6 +749,14 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Month Picker (visible when Monthly is selected) -->
+                        <div id="monthPickerContainer" class="hidden mt-4">
+                            <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Select Month</label>
+                            <input type="month" id="monthPicker"
+                                class="w-full bg-white border-2 border-slate-200 text-slate-900 font-semibold py-3 px-4 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+                                onchange="applyFilters()">
+                        </div>
                     </div>
 
                     <!-- Header Summary Stats -->
@@ -1346,6 +1354,20 @@
 
         function handleTimePeriodChange(period) {
             const qcoSelector = document.getElementById('qcoSelector');
+            const monthPickerContainer = document.getElementById('monthPickerContainer');
+
+            // Show/hide month picker
+            if (period === 'monthly') {
+                monthPickerContainer.classList.remove('hidden');
+                // Default to current month if not set
+                const picker = document.getElementById('monthPicker');
+                if (!picker.value) {
+                    const now = new Date();
+                    picker.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                }
+            } else {
+                monthPickerContainer.classList.add('hidden');
+            }
 
             if (period !== 'single') {
                 // Switch to aggregated mode
@@ -1602,7 +1624,15 @@
                         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
                         break;
                     case 'monthly':
-                        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                        // Use selected month from picker, or default to current month
+                        const monthPicker = document.getElementById('monthPicker');
+                        if (monthPicker && monthPicker.value) {
+                            const [year, month] = monthPicker.value.split('-').map(Number);
+                            startDate = new Date(year, month - 1, 1);
+                            endDate = new Date(year, month, 0, 23, 59, 59); // Last day of selected month
+                        } else {
+                            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                        }
                         break;
                     default:
                         startDate = new Date(0); // All time
