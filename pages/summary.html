@@ -622,6 +622,14 @@
 
             <!-- Right Actions (User, etc.) -->
             <div class="flex items-center gap-4">
+                <!-- Recalculate Timings Button -->
+                <button onclick="recalculateAndHealCurrentQCO()" id="btnRecalculateHeader"
+                    class="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-2 transition-colors shadow-sm font-semibold text-xs uppercase tracking-wider"
+                    title="Recalculate timings from start and end timestamps and heal data in Firebase">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Recalculate Timings</span>
+                </button>
+
                 <!-- Print Button moved here -->
                 <button onclick="window.print()"
                     class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hidden md:flex items-center gap-2 transition-colors">
@@ -680,9 +688,17 @@
                             <p class="text-slate-500 font-medium">Detailed breakdown for <span id="activeQCOName"
                                     class="font-bold text-slate-800">...</span></p>
                         </div>
-                        <div class="text-right hidden md:block">
-                            <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Report Date</p>
-                            <p class="text-lg font-bold text-slate-900" id="reportDate">...</p>
+                        <div class="flex items-center gap-3">
+                            <button onclick="recalculateAndHealCurrentQCO()" id="btnRecalculateTitle"
+                                class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                                title="Recalculate timings from start and end timestamps and heal data in Firebase">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                Recalculate Timings
+                            </button>
+                            <div class="text-right hidden md:block">
+                                <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Report Date</p>
+                                <p class="text-lg font-bold text-slate-900" id="reportDate">...</p>
+                            </div>
                         </div>
                     </div>
 
@@ -1477,6 +1493,90 @@
             lucide.createIcons();
         }
 
+        // ==========================================
+        // LINE SCHEDULES & SCHEDULE HELPERS
+        // ==========================================
+        const RAW_LINE_SCHEDULES = {
+            "S-01": { supervisor: "WASANA-1", breaks: [{ start: "09:30", end: "09:45" }, { start: "12:30", end: "13:00" }, { start: "16:45", end: "17:00" }] },
+            "S-01A": { supervisor: "WASANA-2", breaks: [{ start: "09:30", end: "09:45" }, { start: "12:30", end: "13:00" }, { start: "16:50", end: "17:05" }] },
+            "S-02": { supervisor: "SOHRAB", breaks: [{ start: "09:10", end: "09:25" }, { start: "12:10", end: "12:40" }, { start: "16:20", end: "16:35" }] },
+            "S-03": { supervisor: "SOHEL", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:20", end: "12:50" }, { start: "16:30", end: "16:45" }] },
+            "S-04": { supervisor: "AHMAD", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:20", end: "12:50" }, { start: "16:30", end: "16:45" }] },
+            "S-05": { supervisor: "OMAR FARUK", breaks: [{ start: "09:00", end: "09:15" }, { start: "12:00", end: "12:30" }, { start: "16:15", end: "16:30" }] },
+            "S-06": { supervisor: "SUMI", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+            "S-07": { supervisor: "NAGENDRA", breaks: [{ start: "09:30", end: "09:45" }, { start: "12:30", end: "13:00" }, { start: "16:50", end: "17:05" }] },
+            "S-07A": { supervisor: "KAMAL-2", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+            "S-08": { supervisor: "BALISTER", breaks: [{ start: "09:10", end: "09:25" }, { start: "12:10", end: "12:40" }, { start: "16:20", end: "16:35" }] },
+            "S-09": { supervisor: "MONJURUL", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+            "S-10": { supervisor: "RAJKUMAR", breaks: [{ start: "09:45", end: "10:00" }, { start: "13:00", end: "13:30" }, { start: "17:00", end: "17:15" }] },
+            "S-11": { supervisor: "KAMAL-1", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+            "S-12": { supervisor: "DARMENDRA", breaks: [{ start: "09:00", end: "09:15" }, { start: "12:00", end: "12:30" }, { start: "16:15", end: "16:30" }] },
+            "S-13": { supervisor: "SUMON", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:50", end: "13:20" }, { start: "16:50", end: "17:05" }] },
+            "S-14": { supervisor: "SHARIF", breaks: [{ start: "09:00", end: "09:15" }, { start: "12:00", end: "12:30" }, { start: "16:15", end: "16:30" }] },
+            "S-15": { supervisor: "MUNSEF", breaks: [{ start: "09:30", end: "09:45" }, { start: "12:30", end: "13:00" }, { start: "16:45", end: "17:00" }] },
+            "S-16": { supervisor: "RAHAMAN", breaks: [{ start: "09:50", end: "10:05" }, { start: "13:20", end: "13:50" }, { start: "17:00", end: "17:15" }] },
+            "S-17": { supervisor: "MASUM", breaks: [{ start: "09:50", end: "10:05" }, { start: "13:20", end: "13:50" }, { start: "17:00", end: "17:15" }] },
+            "S-18": { supervisor: "DIANA", breaks: [{ start: "09:50", end: "10:05" }, { start: "13:20", end: "13:50" }, { start: "17:00", end: "17:15" }] },
+            "S-19": { supervisor: "ALAMGIR", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:20", end: "12:50" }, { start: "16:30", end: "16:45" }] },
+            "S-20": { supervisor: "KAZAL", breaks: [{ start: "09:00", end: "09:15" }, { start: "11:50", end: "12:20" }, { start: "16:15", end: "16:30" }] },
+            "S-21": { supervisor: "DEVRAJ", breaks: [{ start: "09:45", end: "10:00" }, { start: "12:50", end: "13:20" }, { start: "16:50", end: "17:05" }] },
+            "S-22": { supervisor: "ASHRAFUL", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:20", end: "12:50" }, { start: "16:30", end: "16:45" }] },
+            "S-23": { supervisor: "RUMA", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:50", end: "13:20" }, { start: "16:50", end: "17:05" }] },
+            "S-24": { supervisor: "NASIR", breaks: [{ start: "09:10", end: "09:25" }, { start: "12:10", end: "12:40" }, { start: "16:20", end: "16:35" }] },
+            "S-25": { supervisor: "AKBAR", breaks: [{ start: "09:50", end: "10:05" }, { start: "13:00", end: "13:30" }, { start: "17:00", end: "17:15" }] },
+            "S-26": { supervisor: "HIMAYAT", breaks: [{ start: "09:45", end: "10:00" }, { start: "13:00", end: "13:30" }, { start: "17:00", end: "17:15" }] },
+            "S-28": { supervisor: "ROOP NARAYAN", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+            "S-29": { supervisor: "SUBA", breaks: [{ start: "09:00", end: "09:15" }, { start: "11:50", end: "12:20" }, { start: "16:15", end: "16:30" }] },
+            "S-30": { supervisor: "RAJIB", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:10", end: "12:40" }, { start: "16:20", end: "16:35" }] },
+            "S-31": { supervisor: "AKASH", breaks: [{ start: "09:00", end: "09:15" }, { start: "11:50", end: "12:20" }, { start: "16:15", end: "16:30" }] },
+            "S-32": { supervisor: "KALU CHARAN", breaks: [{ start: "09:45", end: "10:00" }, { start: "12:50", end: "13:20" }, { start: "16:50", end: "17:05" }] }
+        };
+
+        function getLineSchedule(lineName) {
+            if (!lineName) return null;
+            const key = String(lineName).trim();
+            if (RAW_LINE_SCHEDULES[key]) return RAW_LINE_SCHEDULES[key];
+            const sKey = key.startsWith('S-') ? key : `S-${key}`;
+            if (RAW_LINE_SCHEDULES[sKey]) return RAW_LINE_SCHEDULES[sKey];
+            const normalized = sKey.replace(/S-0?(\d+)/, (m, d) => `S-${d.padStart(2, '0')}`);
+            return RAW_LINE_SCHEDULES[normalized] || null;
+        }
+
+        function showToast(message, type = 'info') {
+            let container = document.getElementById('toastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toastContainer';
+                container.className = 'fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-emerald-600 text-white' : type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white';
+            const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
+
+            toast.className = `p-4 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-medium transform transition-all duration-300 translate-y-4 opacity-0 pointer-events-auto ${bgClass}`;
+            toast.innerHTML = `
+                <i data-lucide="${iconName}" class="w-5 h-5 flex-shrink-0"></i>
+                <div class="flex-1">${message}</div>
+                <button onclick="this.parentElement.remove()" class="opacity-70 hover:opacity-100 transition-opacity">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            `;
+
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-4', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-4');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
         // --- Global State for Calculation ---
         let currentReportData = {
             metadata: {},
@@ -1505,26 +1605,43 @@
                 const data = doc.data();
 
                 // --- Load Line Schedule ---
-                // Extract Line Key (e.g., "S-01" from "S-01-ABC-DEF-01")
                 const qcoNum = data.qcoNumber || "";
                 const parts = qcoNum.split('-');
-                let lineKey = data.lineNumber || "";
-                if (!lineKey && parts.length >= 2) {
-                    lineKey = parts.slice(0, 2).join('-');
+                let rawLine = data.lineNumber || "";
+                if (!rawLine && parts.length >= 2) {
+                    rawLine = parts.slice(0, 2).join('-');
                 }
 
-                if (lineKey && (!currentLineSchedule || currentLineSchedule.lineKey !== lineKey)) {
+                // Normalize line key: e.g. "2" -> "S-02", "S-2" -> "S-02", "S-02" -> "S-02"
+                let normalizedLineKey = rawLine ? String(rawLine).trim() : "";
+                if (normalizedLineKey && !normalizedLineKey.startsWith('S-')) {
+                    normalizedLineKey = `S-${normalizedLineKey.padStart(2, '0')}`;
+                } else if (normalizedLineKey) {
+                    normalizedLineKey = normalizedLineKey.replace(/S-0?(\d+)/, (m, d) => `S-${d.padStart(2, '0')}`);
+                }
+
+                currentLineSchedule = null;
+                if (normalizedLineKey) {
                     try {
-                        const schedDoc = await db.collection('line_schedules').doc(lineKey).get();
+                        let schedDoc = await db.collection('line_schedules').doc(normalizedLineKey).get();
+                        if (!schedDoc.exists && rawLine && rawLine !== normalizedLineKey) {
+                            schedDoc = await db.collection('line_schedules').doc(rawLine).get();
+                        }
                         if (schedDoc.exists) {
-                            currentLineSchedule = { lineKey, ...schedDoc.data() };
-                            console.log("Loaded schedule for", lineKey, currentLineSchedule);
-                        } else {
-                            // Try fallback to RAW_LINE_SCHEDULES or similar? No, just null
-                            currentLineSchedule = null;
+                            currentLineSchedule = { lineKey: normalizedLineKey, ...schedDoc.data() };
+                            console.log("Loaded Firestore schedule for", normalizedLineKey, currentLineSchedule);
                         }
                     } catch (err) {
-                        console.error("Error loading schedule:", err);
+                        console.warn("Could not fetch schedule from Firestore, using fallback:", err);
+                    }
+                }
+
+                // Fallback to RAW_LINE_SCHEDULES if not found in Firestore
+                if (!currentLineSchedule) {
+                    const fallback = getLineSchedule(normalizedLineKey || rawLine);
+                    if (fallback) {
+                        currentLineSchedule = { lineKey: normalizedLineKey || rawLine, ...fallback };
+                        console.log("Using fallback schedule for", normalizedLineKey || rawLine, currentLineSchedule);
                     }
                 }
 
@@ -1570,24 +1687,33 @@
                     allotedWP: data.allotedWP
                 });
 
-                // Process Operations
+                // Process Operations with Timing Sanitization
                 if (data.operationTimings) {
                     Object.entries(data.operationTimings).forEach(([name, details]) => {
+                        const start = details.start ? new Date(details.start) : null;
+                        const end = details.end ? new Date(details.end) : null;
+                        const hasValidStart = start && !isNaN(start.getTime());
+                        const hasValidEnd = end && !isNaN(end.getTime());
+                        const grossMins = (hasValidStart && hasValidEnd && end > start) ? (end.getTime() - start.getTime()) / 60000 : null;
+
                         let finalActualTime = parseFloat(details.actualTime);
-                        if (isNaN(finalActualTime) || finalActualTime <= 0) {
-                            if (details.start && details.end) {
-                                if (currentLineSchedule) {
-                                    finalActualTime = parseFloat(getNetDuration(details.start, details.end, currentLineSchedule).toFixed(2));
-                                } else {
-                                    finalActualTime = parseFloat(((new Date(details.end) - new Date(details.start)) / 60000).toFixed(2));
-                                }
-                            } else {
-                                finalActualTime = 0;
+
+                        if (grossMins !== null) {
+                            let netMins = currentLineSchedule ? getNetDuration(details.start, details.end, currentLineSchedule) : grossMins;
+                            if (netMins <= 0 && grossMins > 0) {
+                                netMins = grossMins;
                             }
-                        } else if (details.start && details.end && currentLineSchedule) {
-                            const netMins = getNetDuration(details.start, details.end, currentLineSchedule);
-                            finalActualTime = parseFloat(netMins.toFixed(2));
+                            if (isNaN(finalActualTime) || finalActualTime <= 0 || finalActualTime > grossMins + 0.5) {
+                                // HEAL HISTORICAL CORRUPTION (e.g. 3535 mins when gross was 4.25 mins)
+                                finalActualTime = parseFloat(netMins.toFixed(2));
+                            } else if (currentLineSchedule && finalActualTime > netMins + 0.5) {
+                                finalActualTime = parseFloat(netMins.toFixed(2));
+                            }
+                        } else if (isNaN(finalActualTime) || finalActualTime < 0) {
+                            finalActualTime = Number(details.duration) || 0;
                         }
+
+                        finalActualTime = Math.max(0, parseFloat(finalActualTime.toFixed(2)));
 
                         if (finalActualTime > 0 || (details.start && details.end)) {
                             currentReportData.operations.push({
@@ -1686,14 +1812,34 @@
                     const wp = parseInt(data.savedManpower || data.allotedWP || data.totalManpower) || 0;
                     totalManpower += wp;
 
-                    // Aggregate operations
+                    // Aggregate operations with timing sanitization
                     if (data.operationTimings) {
+                        const sched = getLineSchedule(data.lineNumber || data.qcoNumber);
                         Object.entries(data.operationTimings).forEach(([name, details]) => {
-                            if (details.actualTime) {
+                            const start = details.start ? new Date(details.start) : null;
+                            const end = details.end ? new Date(details.end) : null;
+                            const hasValidStart = start && !isNaN(start.getTime());
+                            const hasValidEnd = end && !isNaN(end.getTime());
+                            const grossMins = (hasValidStart && hasValidEnd && end > start) ? (end.getTime() - start.getTime()) / 60000 : null;
+
+                            let dur = parseFloat(details.actualTime);
+                            if (grossMins !== null) {
+                                let net = sched ? getNetDuration(details.start, details.end, sched) : grossMins;
+                                if (net <= 0 && grossMins > 0) net = grossMins;
+                                if (isNaN(dur) || dur <= 0 || dur > grossMins + 0.5) {
+                                    dur = parseFloat(net.toFixed(2));
+                                }
+                            } else if (isNaN(dur) || dur < 0) {
+                                dur = Number(details.duration) || 0;
+                            }
+
+                            dur = Math.max(0, parseFloat(dur.toFixed(2)));
+
+                            if (dur > 0 || (details.start && details.end)) {
                                 currentReportData.operations.push({
                                     name: name,
                                     dept: details.department || 'MAINTENANCE',
-                                    duration: parseFloat(details.actualTime),
+                                    duration: dur,
                                     start: details.start,
                                     end: details.end,
                                     qco: data.qcoNumber,
@@ -1825,8 +1971,13 @@
 
             const ops = currentReportData.operations;
 
-            // NEW: Calculate total time from overall start/end using working hours only
+            // Calculate total time from overall start/end using working hours only
             let totalTime = 0;
+            let recordedTime = 0;
+            ops.forEach(op => {
+                recordedTime += (op.duration || 0);
+            });
+            recordedTime = parseFloat(recordedTime.toFixed(2));
 
             if (ops.length > 0) {
                 const starts = ops.map(o => new Date(o.start).getTime()).filter(t => !isNaN(t));
@@ -1843,13 +1994,21 @@
                         totalTime = calculateWorkingHoursOnly(overallStart, overallEnd);
                     }
 
+                    // Total changeover duration cannot be less than total active operations time
+                    if (totalTime < recordedTime) {
+                        totalTime = recordedTime;
+                    }
+
                     console.log('⏱️ Time Calculation:', {
                         overallStart: new Date(overallStart).toLocaleString('en-GB'),
                         overallEnd: new Date(overallEnd).toLocaleString('en-GB'),
                         totalWorkingMinutes: totalTime.toFixed(2),
+                        recordedMinutes: recordedTime.toFixed(2),
                         totalWorkingHours: (totalTime / 60).toFixed(2)
                     });
                 }
+            } else {
+                totalTime = recordedTime;
             }
 
             // Formula: Duration * CostPerMinute * Manpower
@@ -1893,17 +2052,14 @@
             // Initialize known departments
             ['TRIMS', 'CUTTING', 'PRODUCTION', 'MERCHANDISER', 'IE', 'TECHNICAL', 'MAINTENANCE'].forEach(d => depts[d] = 0);
 
-            // Sum durations
-            let recordedTime = 0;
+            // Sum durations by department
             ops.forEach(op => {
                 const d = (op.dept || 'MAINTENANCE').toUpperCase();
-                // Map known deviations if any, or just use raw
                 depts[d] = (depts[d] || 0) + op.duration;
-                recordedTime += op.duration;
             });
 
             // Add unrecorded time if there is a gap (idle time)
-            const unrecordedTime = Math.max(0, totalTime - recordedTime);
+            const unrecordedTime = Math.max(0, parseFloat((totalTime - recordedTime).toFixed(2)));
             if (unrecordedTime > 0.1) { // >0.1 to avoid floating point noise from JS
                 depts['UNRECORDED'] = unrecordedTime;
             }
@@ -2317,6 +2473,107 @@
             efficiencyChart.data.labels = labels;
             efficiencyChart.data.datasets[0].data = values;
             efficiencyChart.update();
+        }
+
+        /**
+         * Recalculates net durations for all operations in the active changeover
+         * from start and end timestamps, heals corrupted data in Firestore, and refreshes the report.
+         */
+        async function recalculateAndHealCurrentQCO() {
+            if (!currentQCOId) {
+                showToast('Please select a specific changeover to recalculate.', 'error');
+                return;
+            }
+
+            const btns = [
+                document.getElementById('btnRecalculateHeader'),
+                document.getElementById('btnRecalculateTitle')
+            ].filter(Boolean);
+
+            btns.forEach(b => {
+                b.disabled = true;
+                b.dataset.prevHtml = b.innerHTML;
+                b.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Recalculating...';
+            });
+            lucide.createIcons();
+
+            try {
+                const doc = await db.collection('changeovers').doc(currentQCOId).get();
+                if (!doc.exists) {
+                    showToast('Changeover not found in database.', 'error');
+                    return;
+                }
+
+                const data = doc.data();
+                if (!data.operationTimings || typeof data.operationTimings !== 'object') {
+                    showToast('No operation timings found for this changeover.', 'error');
+                    return;
+                }
+
+                const qcoNum = data.qcoNumber || "";
+                const parts = qcoNum.split('-');
+                let rawLine = data.lineNumber || "";
+                if (!rawLine && parts.length >= 2) rawLine = parts.slice(0, 2).join('-');
+                const schedule = currentLineSchedule || getLineSchedule(rawLine);
+
+                const updatedTimings = {};
+                let totalActualMins = 0;
+                let healedCount = 0;
+
+                for (const [name, timing] of Object.entries(data.operationTimings)) {
+                    const copy = { ...timing };
+                    const start = timing.start ? new Date(timing.start) : null;
+                    const end = timing.end ? new Date(timing.end) : null;
+                    const hasValidStart = start && !isNaN(start.getTime());
+                    const hasValidEnd = end && !isNaN(end.getTime());
+                    const grossMins = (hasValidStart && hasValidEnd && end > start) ? (end.getTime() - start.getTime()) / 60000 : null;
+
+                    let oldAct = Number(timing.actualTime);
+                    let newAct = oldAct;
+
+                    if (grossMins !== null) {
+                        let net = schedule ? getNetDuration(timing.start, timing.end, schedule, 'day') : grossMins;
+                        if (net <= 0 && grossMins > 0) net = grossMins;
+                        newAct = parseFloat(net.toFixed(2));
+                    } else if (isNaN(newAct) || newAct < 0) {
+                        newAct = Number(timing.duration) || 0;
+                    }
+
+                    newAct = Math.max(0, parseFloat(newAct.toFixed(2)));
+
+                    if (isNaN(oldAct) || Math.abs(oldAct - newAct) > 0.05) {
+                        healedCount++;
+                    }
+
+                    copy.actualTime = newAct;
+                    totalActualMins += newAct;
+                    updatedTimings[name] = copy;
+                }
+
+                const actualCOPT = Math.round(totalActualMins * 100) / 100;
+
+                // Update Firestore document with healed timings and actualCOPT
+                await db.collection('changeovers').doc(currentQCOId).update({
+                    operationTimings: updatedTimings,
+                    actualCOPT: actualCOPT,
+                    lastRecalculatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                showToast(`Recalculated successfully! Healed ${healedCount} operation timing(s).`, 'success');
+
+                // Reload report to refresh all numbers, charts, and tables
+                await generateReport();
+
+            } catch (err) {
+                console.error("Error recalculating changeover:", err);
+                showToast('Failed to recalculate: ' + (err.message || err), 'error');
+            } finally {
+                btns.forEach(b => {
+                    b.disabled = false;
+                    if (b.dataset.prevHtml) b.innerHTML = b.dataset.prevHtml;
+                });
+                lucide.createIcons();
+            }
         }
     </script>
 
