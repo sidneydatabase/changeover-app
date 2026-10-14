@@ -849,33 +849,29 @@
         async function startOperation(qcoId, index, opName) {
             if (!qcoId) return;
             try {
-                // Fetch current data to find the last operation's end time
+                // Fetch current data
                 const doc = await db.collection('changeovers').doc(qcoId).get();
                 const data = doc.data();
                 const timings = data.operationTimings || {};
 
-                let lastEndTime = null;
-                let maxEndTimeMs = 0;
+                // Use the exact current time when operation actually started
+                const timestamp = new Date().toISOString();
 
-                // Iterate through all timings to find the latest end time
-                Object.values(timings).forEach(timing => {
-                    if (timing.end) {
-                        const endTimeMs = new Date(timing.end).getTime();
-                        if (!isNaN(endTimeMs) && endTimeMs > maxEndTimeMs) {
-                            maxEndTimeMs = endTimeMs;
-                            lastEndTime = timing.end;
-                        }
-                    }
-                });
-
-                // Use last end time if available, otherwise use current time
-                const timestamp = lastEndTime ? lastEndTime : new Date().toISOString();
-
-                console.log(`Starting operation: ${opName}`);
-                console.log(`Using start time: ${timestamp} (derived from ${lastEndTime ? 'previous operation end' : 'current time'})`);
+                console.log(`Starting operation: ${opName} at ${timestamp}`);
 
                 const fieldPath = new firebase.firestore.FieldPath('operationTimings', opName);
-                await db.collection('changeovers').doc(qcoId).update(fieldPath, { start: timestamp });
+
+                // If changeover hasn't started yet, record startedAt and status
+                const isFirstEverStart = !data.startedAt && !Object.values(timings).some(t => t && t.start);
+                if (data.status === 'pending' || isFirstEverStart) {
+                    const updateArgs = [fieldPath, { start: timestamp }, 'status', 'in-progress'];
+                    if (!data.startedAt) {
+                        updateArgs.push('startedAt', timestamp);
+                    }
+                    await db.collection('changeovers').doc(qcoId).update(...updateArgs);
+                } else {
+                    await db.collection('changeovers').doc(qcoId).update(fieldPath, { start: timestamp });
+                }
 
                 // SEND FCM NOTIFICATION on FIRST operation only
                 const isFirstOperation = index === '0' || index === 0;
