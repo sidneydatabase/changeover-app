@@ -1987,21 +1987,27 @@
                     const overallStart = Math.min(...starts);
                     const overallEnd = Math.max(...ends);
 
-                    // If schedule is available, use getNetDuration to deduct breaks consistently with operations
-                    if (currentLineSchedule) {
-                        totalTime = getNetDuration(new Date(overallStart).toISOString(), new Date(overallEnd).toISOString(), currentLineSchedule);
-                    } else {
-                        totalTime = calculateWorkingHoursOnly(overallStart, overallEnd);
-                    }
+                    const isSameDay = new Date(overallStart).toDateString() === new Date(overallEnd).toDateString();
 
-                    // Total changeover duration cannot be less than total active operations time
-                    if (totalTime < recordedTime) {
+                    if (isSameDay) {
+                        // For a single-day changeover session, check if the shift span exceeds active operations
+                        let daySpan = 0;
+                        if (currentLineSchedule) {
+                            daySpan = getNetDuration(new Date(overallStart).toISOString(), new Date(overallEnd).toISOString(), currentLineSchedule);
+                        } else {
+                            daySpan = calculateWorkingHoursOnly(overallStart, overallEnd);
+                        }
+                        totalTime = Math.max(recordedTime, daySpan);
+                    } else {
+                        // For multi-day changeovers, spanning entire calendar days charges 10 hours of line stoppage
+                        // for every day/shift (including off-days and non-changeover hours). Use total active operations duration!
                         totalTime = recordedTime;
                     }
 
                     console.log('⏱️ Time Calculation:', {
                         overallStart: new Date(overallStart).toLocaleString('en-GB'),
                         overallEnd: new Date(overallEnd).toLocaleString('en-GB'),
+                        isSameDay,
                         totalWorkingMinutes: totalTime.toFixed(2),
                         recordedMinutes: recordedTime.toFixed(2),
                         totalWorkingHours: (totalTime / 60).toFixed(2)
