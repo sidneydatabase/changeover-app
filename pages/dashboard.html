@@ -1988,11 +1988,10 @@
                         dateDisplay = cDate.toLocaleDateString();
                     }
 
-                    // Use helpers if raw values are missing
-                    const actual = qco.actualCOPT || calculateActualCOPT(qco);
+                    const actual = calculateActualCOPT(qco);
                     const target = qco.targetCOPT || calculateTargetCOPT(qco);
 
-                    const duration = actual > 0 ? `${(Math.round(actual * 10) / 10)} min` : '-';
+                    const duration = actual > 0 ? (actual >= 1 ? `${(Math.round(actual * 10) / 10)} min` : `${(Math.round(actual * 100) / 100)} min`) : '-';
                     const efficiency = calculateEfficiency(target, actual);
 
                     tr.innerHTML = `
@@ -2728,13 +2727,11 @@
                     </div>
                     <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         ${ops.map(([name, t]) => {
-                            let dur = Number(t.actualTime);
-                            if (isNaN(dur) || dur <= 0) {
-                                if (t.start && t.end) dur = Math.round((new Date(t.end) - new Date(t.start)) / 60000);
-                                else dur = 0;
-                            }
+                            const sanitized = getSanitizedOperationTiming(t, name, qco.lineNumber);
+                            const dur = sanitized.duration;
                             const status = t.end ? 'Completed' : (t.start ? 'Running' : 'Pending');
                             const statusClass = t.end ? 'text-emerald-600 font-bold' : (t.start ? 'text-amber-600 font-bold' : 'text-slate-400');
+                            const durDisplay = dur > 0 ? (dur >= 1 ? `${Math.round(dur * 10) / 10} min` : `${Math.round(dur * 100) / 100} min`) : status;
                             return `
                             <div class="flex justify-between items-center p-2.5 bg-slate-50 rounded-lg text-xs hover:bg-slate-100 transition-colors">
                                 <div class="min-w-0 pr-2">
@@ -2742,7 +2739,7 @@
                                     <p class="text-[10px] text-slate-400">${t.department || 'Maintenance'}</p>
                                 </div>
                                 <div class="text-right flex-shrink-0">
-                                    <p class="${statusClass}">${dur > 0 ? `${dur} min` : status}</p>
+                                    <p class="${statusClass}">${durDisplay}</p>
                                 </div>
                             </div>
                             `;
@@ -2778,14 +2775,17 @@
                 </div>
                 ` : ''}
 
-                <div class="flex gap-3 mt-6 pt-6 border-t border-slate-200">
-                    <button onclick="window.location.href='summary.html?qco=${qco.id}'" class="flex-1 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2">
+                <div class="flex flex-wrap gap-3 mt-6 pt-6 border-t border-slate-200">
+                    <button onclick="window.location.href='summary.html?qco=${qco.id}'" class="flex-1 min-w-[140px] py-3 px-4 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 text-sm">
                         <i data-lucide="file-text" class="w-4 h-4"></i> View Summary Report
                     </button>
-                    <button onclick="editQCO('${qco.id}')" class="px-5 py-3 rounded-xl bg-blue-50 text-blue-600 font-semibold hover:bg-blue-100 transition-colors">
+                    <button onclick="recalculateAndHealQCO('${qco.id}')" class="px-4 py-3 rounded-xl bg-amber-50 text-amber-700 font-semibold hover:bg-amber-100 transition-colors flex items-center gap-1.5 text-sm" title="Recalculate timings from start and end timestamps and save to Firebase">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Recalculate Timings
+                    </button>
+                    <button onclick="editQCO('${qco.id}')" class="px-5 py-3 rounded-xl bg-blue-50 text-blue-600 font-semibold hover:bg-blue-100 transition-colors text-sm">
                         Edit
                     </button>
-                    <button onclick="deleteQCO('${qco.id}')" class="px-5 py-3 rounded-xl bg-red-50 text-red-600 font-semibold hover:bg-red-100 transition-colors">
+                    <button onclick="deleteQCO('${qco.id}')" class="px-4 py-3 rounded-xl bg-red-50 text-red-600 font-semibold hover:bg-red-100 transition-colors text-sm">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
                     </button>
                 </div>
@@ -3828,22 +3828,20 @@
                         ops.forEach(op => {
                             const name = typeof op === 'string' ? op : (op.name || 'Op');
                             const timing = timings[name] || {};
-                            let act = Number(timing.actualTime);
-                            if (isNaN(act) || act <= 0) {
-                                if (timing.start && timing.end) act = (new Date(timing.end) - new Date(timing.start)) / 60000;
-                                else act = 0;
-                            }
+                            const sanitized = getSanitizedOperationTiming(timing, name, qco.lineNumber);
+                            const act = sanitized.duration;
+
                             let std = 0;
                             if (typeof op === 'object' && op.smv != null) {
                                 std = Number(op.smv) * 10;
-                            } else if (timing.standardTime != null) {
-                                std = Number(timing.standardTime);
+                            } else if (sanitized.standardTime != null) {
+                                std = Number(sanitized.standardTime);
                             }
 
                             const shortName = name.length > 18 ? name.slice(0, 16) + '...' : name;
                             opLabels.push(shortName);
-                            actualData.push(act > 0 ? Math.round(act * 10) / 10 : 0);
-                            standardData.push(std > 0 ? Math.round(std * 10) / 10 : 0);
+                            actualData.push(act > 0 ? parseFloat(act.toFixed(2)) : 0);
+                            standardData.push(std > 0 ? parseFloat(std.toFixed(2)) : 0);
                         });
 
                         performanceChart.config.type = 'bar';
@@ -4119,8 +4117,9 @@
                         if (qco.operationTimings && typeof qco.operationTimings === 'object') {
                             // Iterate through operation entries
                             Object.entries(qco.operationTimings).forEach(([opName, details]) => {
-                                const duration = Number(details.actualTime) || Number(details.duration) || 0;
-                                const dept = (details.department || 'MAINTENANCE').toUpperCase();
+                                const sanitized = getSanitizedOperationTiming(details, opName, qco.lineNumber);
+                                const duration = sanitized.duration;
+                                const dept = (sanitized.department || 'MAINTENANCE').toUpperCase();
                                 if (deptMap[dept] !== undefined) {
                                     deptMap[dept] += duration;
                                 } else {
@@ -4161,7 +4160,7 @@
 
                         if (!lineData[line]) lineData[line] = { count: 0, totalCOPT: 0, totalTarget: 0 };
                         lineData[line].count++;
-                        const actual = qco.actualCOPT || calculateActualCOPT(qco);
+                        const actual = calculateActualCOPT(qco);
                         const target = qco.targetCOPT || calculateTargetCOPT(qco);
                         if (actual > 0) lineData[line].totalCOPT += Number(actual);
                         if (target > 0) lineData[line].totalTarget += Number(target);
@@ -4203,7 +4202,8 @@
                     data.forEach(qco => {
                         if (qco.operationTimings && typeof qco.operationTimings === 'object') {
                             Object.entries(qco.operationTimings).forEach(([name, details]) => {
-                                const duration = Number(details.actualTime) || Number(details.duration) || 0;
+                                const sanitized = getSanitizedOperationTiming(details, name, qco.lineNumber);
+                                const duration = sanitized.duration;
                                 if (details.end && name && duration > 0) {
                                     let endTime;
                                     try {
@@ -4216,7 +4216,7 @@
                                         name: name,
                                         duration: duration,
                                         endTime: endTime,
-                                        dept: details.department || 'Unknown',
+                                        dept: sanitized.department || 'Unknown',
                                         qco: qco.qcoNumber || 'QCO'
                                     });
                                 }
@@ -4236,7 +4236,7 @@
                             <p class="text-[10px] text-slate-500">QCO #${op.qco}</p>
                         </div>
                         <div class="text-right">
-                            <p class="text-xs font-bold text-blue-600">${op.duration.toFixed(1)}min</p>
+                            <p class="text-xs font-bold text-blue-600">${op.duration >= 1 ? op.duration.toFixed(1) : op.duration.toFixed(2)}min</p>
                             <p class="text-[10px] text-slate-400">${op.endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
                     </div>
@@ -4251,7 +4251,8 @@
                         if (qco.operationTimings && typeof qco.operationTimings === 'object') {
                             // operationTimings is an Object, not Array
                             Object.entries(qco.operationTimings).forEach(([name, details]) => {
-                                const duration = Number(details.actualTime) || Number(details.duration) || 0;
+                                const sanitized = getSanitizedOperationTiming(details, name, qco.lineNumber);
+                                const duration = sanitized.duration;
                                 if (!name || name === 'Unknown' || duration <= 0) return;
 
                                 if (!opMap[name]) {
@@ -4555,36 +4556,168 @@
                 }
 
                 // =====================================================
-                // COPT CALCULATION HELPERS
+                // COPT CALCULATION & TIMING SANITIZATION HELPERS
                 // =====================================================
+                const RAW_LINE_SCHEDULES = {
+                    "S-01": { supervisor: "WASANA-1", breaks: [{ start: "09:30", end: "09:45" }, { start: "12:30", end: "13:00" }, { start: "16:45", end: "17:00" }] },
+                    "S-01A": { supervisor: "WASANA-2", breaks: [{ start: "09:30", end: "09:45" }, { start: "12:30", end: "13:00" }, { start: "16:50", end: "17:05" }] },
+                    "S-02": { supervisor: "SOHRAB", breaks: [{ start: "09:10", end: "09:25" }, { start: "12:10", end: "12:40" }, { start: "16:20", end: "16:35" }] },
+                    "S-03": { supervisor: "SOHEL", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:20", end: "12:50" }, { start: "16:30", end: "16:45" }] },
+                    "S-04": { supervisor: "AHMAD", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:20", end: "12:50" }, { start: "16:30", end: "16:45" }] },
+                    "S-05": { supervisor: "OMAR FARUK", breaks: [{ start: "09:00", end: "09:15" }, { start: "12:00", end: "12:30" }, { start: "16:15", end: "16:30" }] },
+                    "S-06": { supervisor: "SUMI", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+                    "S-07": { supervisor: "NAGENDRA", breaks: [{ start: "09:30", end: "09:45" }, { start: "12:30", end: "13:00" }, { start: "16:50", end: "17:05" }] },
+                    "S-07A": { supervisor: "KAMAL-2", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+                    "S-08": { supervisor: "BALISTER", breaks: [{ start: "09:10", end: "09:25" }, { start: "12:10", end: "12:40" }, { start: "16:20", end: "16:35" }] },
+                    "S-09": { supervisor: "MONJURUL", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+                    "S-10": { supervisor: "RAJKUMAR", breaks: [{ start: "09:45", end: "10:00" }, { start: "13:00", end: "13:30" }, { start: "17:00", end: "17:15" }] },
+                    "S-11": { supervisor: "KAMAL-1", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+                    "S-12": { supervisor: "DARMENDRA", breaks: [{ start: "09:00", end: "09:15" }, { start: "12:00", end: "12:30" }, { start: "16:15", end: "16:30" }] },
+                    "S-13": { supervisor: "SUMON", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:50", end: "13:20" }, { start: "16:50", end: "17:05" }] },
+                    "S-14": { supervisor: "SHARIF", breaks: [{ start: "09:00", end: "09:15" }, { start: "12:00", end: "12:30" }, { start: "16:15", end: "16:30" }] },
+                    "S-15": { supervisor: "MUNSEF", breaks: [{ start: "09:30", end: "09:45" }, { start: "12:30", end: "13:00" }, { start: "16:45", end: "17:00" }] },
+                    "S-16": { supervisor: "RAHAMAN", breaks: [{ start: "09:50", end: "10:05" }, { start: "13:20", end: "13:50" }, { start: "17:00", end: "17:15" }] },
+                    "S-17": { supervisor: "MASUM", breaks: [{ start: "09:50", end: "10:05" }, { start: "13:20", end: "13:50" }, { start: "17:00", end: "17:15" }] },
+                    "S-18": { supervisor: "DIANA", breaks: [{ start: "09:50", end: "10:05" }, { start: "13:20", end: "13:50" }, { start: "17:00", end: "17:15" }] },
+                    "S-19": { supervisor: "ALAMGIR", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:20", end: "12:50" }, { start: "16:30", end: "16:45" }] },
+                    "S-20": { supervisor: "KAZAL", breaks: [{ start: "09:00", end: "09:15" }, { start: "11:50", end: "12:20" }, { start: "16:15", end: "16:30" }] },
+                    "S-21": { supervisor: "DEVRAJ", breaks: [{ start: "09:45", end: "10:00" }, { start: "12:50", end: "13:20" }, { start: "16:50", end: "17:05" }] },
+                    "S-22": { supervisor: "ASHRAFUL", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:20", end: "12:50" }, { start: "16:30", end: "16:45" }] },
+                    "S-23": { supervisor: "RUMA", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:50", end: "13:20" }, { start: "16:50", end: "17:05" }] },
+                    "S-24": { supervisor: "NASIR", breaks: [{ start: "09:10", end: "09:25" }, { start: "12:10", end: "12:40" }, { start: "16:20", end: "16:35" }] },
+                    "S-25": { supervisor: "AKBAR", breaks: [{ start: "09:50", end: "10:05" }, { start: "13:00", end: "13:30" }, { start: "17:00", end: "17:15" }] },
+                    "S-26": { supervisor: "HIMAYAT", breaks: [{ start: "09:45", end: "10:00" }, { start: "13:00", end: "13:30" }, { start: "17:00", end: "17:15" }] },
+                    "S-28": { supervisor: "ROOP NARAYAN", breaks: [{ start: "09:40", end: "09:55" }, { start: "12:40", end: "13:10" }, { start: "16:50", end: "17:05" }] },
+                    "S-29": { supervisor: "SUBA", breaks: [{ start: "09:00", end: "09:15" }, { start: "11:50", end: "12:20" }, { start: "16:15", end: "16:30" }] },
+                    "S-30": { supervisor: "RAJIB", breaks: [{ start: "09:20", end: "09:35" }, { start: "12:10", end: "12:40" }, { start: "16:20", end: "16:35" }] },
+                    "S-31": { supervisor: "AKASH", breaks: [{ start: "09:00", end: "09:15" }, { start: "11:50", end: "12:20" }, { start: "16:15", end: "16:30" }] },
+                    "S-32": { supervisor: "KALU CHARAN", breaks: [{ start: "09:45", end: "10:00" }, { start: "12:50", end: "13:20" }, { start: "16:50", end: "17:05" }] }
+                };
+
+                function getLineSchedule(lineName) {
+                    if (!lineName) return null;
+                    const key = String(lineName).trim();
+                    if (RAW_LINE_SCHEDULES[key]) return RAW_LINE_SCHEDULES[key];
+                    const sKey = key.startsWith('S-') ? key : `S-${key}`;
+                    if (RAW_LINE_SCHEDULES[sKey]) return RAW_LINE_SCHEDULES[sKey];
+                    const normalized = sKey.replace(/S-0?(\d+)/, (m, d) => `S-${d.padStart(2, '0')}`);
+                    return RAW_LINE_SCHEDULES[normalized] || null;
+                }
+
+                function getNetDuration(startISO, endISO, schedule, mode = 'day') {
+                    const start = new Date(startISO);
+                    const end = new Date(endISO);
+                    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return 0;
+
+                    let totalWorkingMs = 0;
+                    let curDay = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+                    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 0, 0, 0, 0);
+
+                    while (curDay <= endDay) {
+                        if (curDay.getDay() !== 5) {
+                            let shiftStartMs, shiftEndMs;
+                            if (mode === 'day') {
+                                const dayShiftStart = new Date(curDay);
+                                dayShiftStart.setHours(7, 0, 0, 0);
+                                const dayShiftEnd = new Date(curDay);
+                                dayShiftEnd.setHours(18, 0, 0, 0);
+                                shiftStartMs = dayShiftStart.getTime();
+                                shiftEndMs = dayShiftEnd.getTime();
+                            } else {
+                                shiftStartMs = curDay.getTime();
+                                shiftEndMs = curDay.getTime() + 86400000;
+                            }
+
+                            const winStart = Math.max(start.getTime(), shiftStartMs);
+                            const winEnd = Math.min(end.getTime(), shiftEndMs);
+
+                            if (winStart < winEnd) {
+                                let dayWorkingMs = winEnd - winStart;
+                                if (schedule && Array.isArray(schedule.breaks)) {
+                                    schedule.breaks.forEach(b => {
+                                        if (!b.start || !b.end) return;
+                                        const [sh, sm] = b.start.split(':').map(Number);
+                                        const [eh, em] = b.end.split(':').map(Number);
+                                        const bStart = new Date(curDay);
+                                        bStart.setHours(sh, sm, 0, 0);
+                                        const bEnd = new Date(curDay);
+                                        bEnd.setHours(eh, em, 0, 0);
+                                        const overlapStart = Math.max(winStart, bStart.getTime());
+                                        const overlapEnd = Math.min(winEnd, bEnd.getTime());
+                                        if (overlapStart < overlapEnd) {
+                                            dayWorkingMs -= (overlapEnd - overlapStart);
+                                        }
+                                    });
+                                }
+                                if (dayWorkingMs > 0) totalWorkingMs += dayWorkingMs;
+                            }
+                        }
+                        curDay.setDate(curDay.getDate() + 1);
+                    }
+                    const netMinutes = totalWorkingMs / 60000;
+                    return parseFloat(netMinutes.toFixed(2));
+                }
+
+                function getSanitizedOperationTiming(timing, opName, lineNumber) {
+                    if (!timing || typeof timing !== 'object') {
+                        return { duration: 0, actualTime: 0, start: null, end: null, standardTime: null, department: 'Maintenance', remarks: '' };
+                    }
+
+                    const start = timing.start ? new Date(timing.start) : null;
+                    const end = timing.end ? new Date(timing.end) : null;
+                    const hasValidStart = start && !isNaN(start.getTime());
+                    const hasValidEnd = end && !isNaN(end.getTime());
+
+                    let grossMins = (hasValidStart && hasValidEnd && end > start) ? (end.getTime() - start.getTime()) / 60000 : null;
+                    let act = Number(timing.actualTime);
+
+                    if (isNaN(act) || act < 0) {
+                        act = (grossMins !== null) ? grossMins : (Number(timing.duration) || 0);
+                    } else if (grossMins !== null && act > grossMins + 0.5) {
+                        // SANITIZE HISTORICAL CORRUPTION: e.g. actualTime: 3535 when end-start is only 4.25 min
+                        const schedule = getLineSchedule(lineNumber);
+                        act = schedule ? getNetDuration(timing.start, timing.end, schedule) : grossMins;
+                    }
+
+                    act = Math.max(0, parseFloat(act.toFixed(2)));
+
+                    return {
+                        duration: act,
+                        actualTime: act,
+                        grossMins: grossMins !== null ? parseFloat(grossMins.toFixed(2)) : null,
+                        start: hasValidStart ? start : null,
+                        end: hasValidEnd ? end : null,
+                        standardTime: timing.standardTime != null ? Number(timing.standardTime) : null,
+                        department: timing.department || 'Maintenance',
+                        remarks: timing.remarks || ''
+                    };
+                }
+
                 /**
-                 * Calculate actual COPT (total time taken) from operation timings
+                 * Calculate actual COPT (total time taken) from operation timings with sanitization
                  * @param {Object} qco - QCO document data
                  * @returns {number} Total duration in minutes
                  */
                 function calculateActualCOPT(qco) {
-                    if (qco.actualCOPT !== undefined && qco.actualCOPT !== null && !isNaN(Number(qco.actualCOPT))) {
-                        return Math.round(Number(qco.actualCOPT) * 10) / 10;
-                    }
+                    const timings = (qco.operationTimings && typeof qco.operationTimings === 'object') ? qco.operationTimings : {};
+                    const entries = Object.entries(timings);
 
-                    if (!qco.operationTimings || typeof qco.operationTimings !== 'object') {
-                        return 0;
-                    }
-
-                    let total = 0;
-                    Object.values(qco.operationTimings).forEach(details => {
-                        let duration = Number(details.actualTime) || Number(details.duration) || 0;
-                        if (!duration && details.start && details.end) {
-                            const s = new Date(details.start).getTime();
-                            const e = new Date(details.end).getTime();
-                            if (!isNaN(s) && !isNaN(e) && e > s) {
-                                duration = (e - s) / 60000;
-                            }
-                        }
-                        total += duration;
+                    let sanitizedSum = 0;
+                    entries.forEach(([name, details]) => {
+                        const s = getSanitizedOperationTiming(details, name, qco.lineNumber);
+                        sanitizedSum += s.duration;
                     });
+                    sanitizedSum = Math.round(sanitizedSum * 100) / 100;
 
-                    return Math.round(total * 10) / 10;
+                    // If qco.actualCOPT exists, verify it isn't an un-sanitized corrupted spike
+                    if (qco.actualCOPT !== undefined && qco.actualCOPT !== null && !isNaN(Number(qco.actualCOPT))) {
+                        const saved = Number(qco.actualCOPT);
+                        if (entries.length === 0 || saved <= sanitizedSum * 1.25 + 5) {
+                            return Math.round(saved * 100) / 100;
+                        }
+                    }
+
+                    return sanitizedSum;
                 }
 
                 /**
@@ -4604,6 +4737,60 @@
                     const multiplier = multipliers[category] || 3;
 
                     return smv > 0 ? Math.round(smv * multiplier) : 0;
+                }
+
+                /**
+                 * Recalculates clean net durations for a changeover and saves back to Firestore.
+                 * Heals previous corrupted records permanently in 1 click.
+                 */
+                async function recalculateAndHealQCO(qcoId) {
+                    const qco = allChangeovers.find(c => c.id === qcoId);
+                    if (!qco || !qco.operationTimings) {
+                        showToast('No operation timings found for this changeover.', 'error');
+                        return;
+                    }
+
+                    try {
+                        const schedule = getLineSchedule(qco.lineNumber);
+                        const updatedTimings = {};
+                        let totalActualMins = 0;
+
+                        for (const [name, t] of Object.entries(qco.operationTimings)) {
+                            const copy = { ...t };
+                            if (t.start && t.end) {
+                                const s = new Date(t.start);
+                                const e = new Date(t.end);
+                                if (!isNaN(s.getTime()) && !isNaN(e.getTime()) && e > s) {
+                                    const net = getNetDuration(t.start, t.end, schedule, 'day');
+                                    copy.actualTime = parseFloat(net.toFixed(2));
+                                }
+                            }
+                            if (copy.actualTime != null) {
+                                totalActualMins += Number(copy.actualTime) || 0;
+                            }
+                            updatedTimings[name] = copy;
+                        }
+
+                        const actualCOPT = Math.round(totalActualMins * 100) / 100;
+                        const targetCOPT = calculateTargetCOPT(qco);
+
+                        await db.collection('changeovers').doc(qcoId).update({
+                            operationTimings: updatedTimings,
+                            actualCOPT: actualCOPT,
+                            targetCOPT: targetCOPT > 0 ? targetCOPT : null
+                        });
+
+                        qco.operationTimings = updatedTimings;
+                        qco.actualCOPT = actualCOPT;
+                        if (targetCOPT > 0) qco.targetCOPT = targetCOPT;
+
+                        showToast(`Timings healed & saved! Actual COPT: ${actualCOPT}m`, 'success');
+                        showDetails(qcoId);
+                        applyCurrentFilters();
+                    } catch (err) {
+                        console.error('Error recalculating timings:', err);
+                        showToast('Failed to recalculate: ' + err.message, 'error');
+                    }
                 }
 
                 // =====================================================

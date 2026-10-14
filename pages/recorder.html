@@ -1135,7 +1135,7 @@
                         totalActualMins += getNetDuration(t.start, t.end, currentLineSchedule);
                     }
                 });
-                const actualCOPT = Math.round(totalActualMins * 10) / 10;
+                const actualCOPT = Math.round(totalActualMins * 100) / 100;
 
                 // Update Firebase
                 await db.collection('changeovers').doc(currentQCOData.id).update({
@@ -1474,82 +1474,70 @@
         /**
          * Calculates net duration in minutes, excluding break times and Fridays.
          */
-        function getNetDuration(startISO, endISO, schedule) {
+        function getNetDuration(startISO, endISO, schedule, mode = shiftMode) {
             const start = new Date(startISO);
             const end = new Date(endISO);
-            if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
-            const mode = shiftMode;
+            if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return 0;
 
-            // Deduct Friday Overlap across ANY mode
-            let fridayDeductionMinutes = 0;
-            let tempStart = new Date(start);
-            while (tempStart < end) {
-                if (tempStart.getDay() === 5) {
-                    const fStart = new Date(Math.max(start.getTime(), new Date(tempStart.getFullYear(), tempStart.getMonth(), tempStart.getDate(), 0, 0, 0).getTime()));
-                    const fEnd = new Date(Math.min(end.getTime(), new Date(tempStart.getFullYear(), tempStart.getMonth(), tempStart.getDate(), 23, 59, 59, 999).getTime()));
-                    if (fStart < fEnd) {
-                        fridayDeductionMinutes += (fEnd - fStart) / 60000;
+            let totalWorkingMs = 0;
+            let curDay = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+            const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 0, 0, 0, 0);
+
+            while (curDay <= endDay) {
+                // Skip Friday (Day 5) completely
+                if (curDay.getDay() !== 5) {
+                    let shiftStartMs, shiftEndMs;
+                    if (mode === 'day') {
+                        // Day mode: 07:00 to 18:00
+                        const dayShiftStart = new Date(curDay);
+                        dayShiftStart.setHours(7, 0, 0, 0);
+                        const dayShiftEnd = new Date(curDay);
+                        dayShiftEnd.setHours(18, 0, 0, 0);
+                        shiftStartMs = dayShiftStart.getTime();
+                        shiftEndMs = dayShiftEnd.getTime();
+                    } else {
+                        // Day-Night (24h) mode
+                        shiftStartMs = curDay.getTime();
+                        shiftEndMs = curDay.getTime() + 86400000;
                     }
-                }
-                tempStart.setDate(tempStart.getDate() + 1);
-                tempStart.setHours(0, 0, 0, 0);
-            }
 
-            if (mode === 'day') {
-                // Logic: Only count minutes within 07:00 and 18:00
-                // For now, if it spans multiple days, we process each day.
-                let totalMins = 0;
-                let iter = new Date(start);
+                    const winStart = Math.max(start.getTime(), shiftStartMs);
+                    const winEnd = Math.min(end.getTime(), shiftEndMs);
 
-                while (iter < end) {
-                    const nextMin = new Date(iter.getTime() + 60000);
-                    if (iter.getDay() !== 5) { // Skip Friday explicitly
-                        const h = iter.getHours();
-                        const isWithinShift = h >= 7 && h < 18; // 07:00 to 17:59:59
+                    if (winStart < winEnd) {
+                        let dayWorkingMs = winEnd - winStart;
 
-                        if (isWithinShift) {
-                            // Check if this minute overlaps with a break
-                            let inBreak = false;
-                            if (schedule && schedule.breaks) {
-                                const timeStr = `${h.toString().padStart(2, '0')}:${iter.getMinutes().toString().padStart(2, '0')}`;
-                                inBreak = schedule.breaks.some(b => timeStr >= b.start && timeStr < b.end);
-                            }
-                            if (!inBreak) totalMins++;
+                        // Deduct break overlaps
+                        if (schedule && Array.isArray(schedule.breaks)) {
+                            schedule.breaks.forEach(b => {
+                                if (!b.start || !b.end) return;
+                                const [sh, sm] = b.start.split(':').map(Number);
+                                const [eh, em] = b.end.split(':').map(Number);
+
+                                const bStart = new Date(curDay);
+                                bStart.setHours(sh, sm, 0, 0);
+                                const bEnd = new Date(curDay);
+                                bEnd.setHours(eh, em, 0, 0);
+
+                                const overlapStart = Math.max(winStart, bStart.getTime());
+                                const overlapEnd = Math.min(winEnd, bEnd.getTime());
+
+                                if (overlapStart < overlapEnd) {
+                                    dayWorkingMs -= (overlapEnd - overlapStart);
+                                }
+                            });
+                        }
+
+                        if (dayWorkingMs > 0) {
+                            totalWorkingMs += dayWorkingMs;
                         }
                     }
-                    iter = nextMin;
                 }
-                return totalMins;
-            } else {
-                // Day-Night (24h) Mode
-                let totalMinutes = (end - start) / 60000;
-                totalMinutes = Math.max(0, totalMinutes - fridayDeductionMinutes); // Deduct Friday time
-
-                if (!schedule || !schedule.breaks || !Array.isArray(schedule.breaks)) return totalMinutes;
-
-                // Simple break overlap logic for 24h (same day assumption for now)
-                const getBreakOverlay = (breakStartStr, breakEndStr) => {
-                    const bStart = new Date(start);
-                    const [sh, sm] = breakStartStr.split(':').map(Number);
-                    bStart.setHours(sh, sm, 0, 0);
-                    const bEnd = new Date(start);
-                    const [eh, em] = breakEndStr.split(':').map(Number);
-                    bEnd.setHours(eh, em, 0, 0);
-
-                    const overlapStart = new Date(Math.max(start, bStart));
-                    const overlapEnd = new Date(Math.min(end, bEnd));
-
-                    // Do not deduct break if the overlap itself is on a Friday, as it's already deducted above
-                    if (overlapStart < overlapEnd && overlapStart.getDay() !== 5) {
-                        return (overlapEnd - overlapStart) / 60000;
-                    }
-                    return 0;
-                };
-
-                let deduction = 0;
-                schedule.breaks.forEach(b => deduction += getBreakOverlay(b.start, b.end));
-                return Math.max(0, totalMinutes - deduction);
+                curDay.setDate(curDay.getDate() + 1);
             }
+
+            const netMinutes = totalWorkingMs / 60000;
+            return parseFloat(netMinutes.toFixed(2));
         }
 
         function renderOperationsList(operations, timings, qcoId) {
@@ -1596,9 +1584,11 @@
                 // Common button logic - always pass qcoId!
                 if (endTime && actualTime !== null) {
                     // Completed - show all controls
-                    const isOnTime = standardTime ? parseFloat(actualTime) <= parseFloat(standardTime) : true;
+                    const actVal = parseFloat(actualTime);
+                    const stdVal = standardTime ? parseFloat(standardTime) : null;
+                    const isOnTime = stdVal !== null ? actVal <= stdVal : true;
                     const comparisonColor = isOnTime ? 'text-emerald-600' : 'text-rose-600';
-                    const variance = standardTime ? (parseFloat(actualTime) - parseFloat(standardTime)).toFixed(2) : 0;
+                    const variance = stdVal !== null ? parseFloat((actVal - stdVal).toFixed(2)) : 0;
 
                     rowHtml = `
                     <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
@@ -1610,10 +1600,10 @@
                                 <p class="text-sm font-bold text-slate-900">${opName}</p>
                                 <div class="flex items-center gap-2 mt-1">
                                     <span class="text-[10px] font-bold ${comparisonColor} bg-${isOnTime ? 'emerald' : 'rose'}-50 px-2 py-0.5 rounded">
-                                        ${actualTime}m
+                                        ${actVal}m
                                     </span>
-                                    ${standardTime ? `<span class="text-[10px] font-medium text-slate-400">vs ${standardTime}m</span>` : ''}
-                                    ${standardTime ? `<span class="text-[10px] font-bold ${comparisonColor}">${variance > 0 ? '+' : ''}${variance}m</span>` : ''}
+                                    ${stdVal !== null ? `<span class="text-[10px] font-medium text-slate-400">vs ${stdVal}m</span>` : ''}
+                                    ${stdVal !== null ? `<span class="text-[10px] font-bold ${comparisonColor}">${variance > 0 ? '+' : ''}${variance}m</span>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -1786,14 +1776,28 @@
                 const existing = data.operationTimings[opName] || {};
 
                 const fieldPath = new firebase.firestore.FieldPath('operationTimings', opName);
+                const updatedActualTime = (actualTime !== null && !isNaN(actualTime)) ? parseFloat(actualTime) : existing.actualTime;
                 await db.collection('changeovers').doc(qcoId).update(fieldPath, {
                     ...existing,
                     start: startISO,
                     end: endISO,
                     department: newDept,
                     remarks: newRemarks,
-                    actualTime: actualTime ? parseFloat(actualTime) : existing.actualTime
+                    actualTime: updatedActualTime
                 });
+
+                // Recalculate actualCOPT on the document so dashboard and summary are immediately in sync
+                const postDoc = await db.collection('changeovers').doc(qcoId).get();
+                const postData = postDoc.data();
+                if (postData && postData.operationTimings) {
+                    let reSum = 0;
+                    Object.values(postData.operationTimings).forEach(t => {
+                        if (t.actualTime != null) reSum += Number(t.actualTime) || 0;
+                    });
+                    await db.collection('changeovers').doc(qcoId).update({
+                        actualCOPT: Math.round(reSum * 100) / 100
+                    });
+                }
 
                 closeEditModal();
                 loadData();

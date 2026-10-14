@@ -2087,60 +2087,70 @@
          * Calculates net duration in minutes, excluding break times.
          * Assumes breaks are in "HH:MM" 24h format.
          */
-        function getNetDuration(startISO, endISO, schedule) {
+        function getNetDuration(startISO, endISO, schedule, mode = 'day') {
             const start = new Date(startISO);
             const end = new Date(endISO);
-            let totalMinutes = (end - start) / 60000;
+            if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return 0;
 
-            // Deduct Friday Overlap
-            let fridayDeductionMinutes = 0;
-            let tempStart = new Date(start);
-            while (tempStart < end) {
-                if (tempStart.getDay() === 5) {
-                    const fStart = new Date(Math.max(start.getTime(), new Date(tempStart.getFullYear(), tempStart.getMonth(), tempStart.getDate(), 0, 0, 0).getTime()));
-                    const fEnd = new Date(Math.min(end.getTime(), new Date(tempStart.getFullYear(), tempStart.getMonth(), tempStart.getDate(), 23, 59, 59, 999).getTime()));
-                    if (fStart < fEnd) {
-                        fridayDeductionMinutes += (fEnd - fStart) / 60000;
+            let totalWorkingMs = 0;
+            let curDay = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+            const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 0, 0, 0, 0);
+
+            while (curDay <= endDay) {
+                // Skip Friday (Day 5) completely
+                if (curDay.getDay() !== 5) {
+                    let shiftStartMs, shiftEndMs;
+                    if (mode === 'day') {
+                        // Day mode: 07:00 to 18:00
+                        const dayShiftStart = new Date(curDay);
+                        dayShiftStart.setHours(7, 0, 0, 0);
+                        const dayShiftEnd = new Date(curDay);
+                        dayShiftEnd.setHours(18, 0, 0, 0);
+                        shiftStartMs = dayShiftStart.getTime();
+                        shiftEndMs = dayShiftEnd.getTime();
+                    } else {
+                        // Day-Night (24h) mode
+                        shiftStartMs = curDay.getTime();
+                        shiftEndMs = curDay.getTime() + 86400000;
+                    }
+
+                    const winStart = Math.max(start.getTime(), shiftStartMs);
+                    const winEnd = Math.min(end.getTime(), shiftEndMs);
+
+                    if (winStart < winEnd) {
+                        let dayWorkingMs = winEnd - winStart;
+
+                        // Deduct break overlaps
+                        if (schedule && Array.isArray(schedule.breaks)) {
+                            schedule.breaks.forEach(b => {
+                                if (!b.start || !b.end) return;
+                                const [sh, sm] = b.start.split(':').map(Number);
+                                const [eh, em] = b.end.split(':').map(Number);
+
+                                const bStart = new Date(curDay);
+                                bStart.setHours(sh, sm, 0, 0);
+                                const bEnd = new Date(curDay);
+                                bEnd.setHours(eh, em, 0, 0);
+
+                                const overlapStart = Math.max(winStart, bStart.getTime());
+                                const overlapEnd = Math.min(winEnd, bEnd.getTime());
+
+                                if (overlapStart < overlapEnd) {
+                                    dayWorkingMs -= (overlapEnd - overlapStart);
+                                }
+                            });
+                        }
+
+                        if (dayWorkingMs > 0) {
+                            totalWorkingMs += dayWorkingMs;
+                        }
                     }
                 }
-                tempStart.setDate(tempStart.getDate() + 1);
-                tempStart.setHours(0, 0, 0, 0);
+                curDay.setDate(curDay.getDate() + 1);
             }
 
-            totalMinutes = Math.max(0, totalMinutes - fridayDeductionMinutes);
-
-            if (!schedule || !schedule.breaks || !Array.isArray(schedule.breaks)) {
-                return totalMinutes;
-            }
-
-            // Check if a time (Date) falls within today's break window
-            const getBreakOverlay = (breakStartStr, breakEndStr) => {
-                const bStart = new Date(start);
-                const [sh, sm] = breakStartStr.split(':').map(Number);
-                bStart.setHours(sh, sm, 0, 0);
-
-                const bEnd = new Date(start);
-                const [eh, em] = breakEndStr.split(':').map(Number);
-                bEnd.setHours(eh, em, 0, 0);
-
-                const overlapStart = new Date(Math.max(start, bStart));
-                const overlapEnd = new Date(Math.min(end, bEnd));
-
-                if (overlapStart < overlapEnd && overlapStart.getDay() !== 5) {
-                    return (overlapEnd - overlapStart) / 60000;
-                }
-                return 0;
-            };
-
-            let totalDeduction = 0;
-            schedule.breaks.forEach(brk => {
-                const deduction = getBreakOverlay(brk.start, brk.end);
-                if (deduction > 0) {
-                    totalDeduction += deduction;
-                }
-            });
-
-            return Math.max(0, totalMinutes - totalDeduction);
+            const netMinutes = totalWorkingMs / 60000;
+            return parseFloat(netMinutes.toFixed(2));
         }
         // --- Efficiency Chart Logic ---
         let efficiencyChart = null;
