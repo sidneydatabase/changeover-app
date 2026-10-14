@@ -1355,11 +1355,9 @@
                                     <span class="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold"
                                         id="totalTrend">+12%</span>
                                 </div>
-                                <h3 class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Total
-                                    Changeovers
-                                </h3>
+                                <h3 class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1" id="totalCardTitle">Total Changeovers</h3>
                                 <p class="text-4xl font-heading font-bold text-slate-900" id="totalChangeovers">-</p>
-                                <p class="text-xs text-slate-400 mt-2">Grand Total</p>
+                                <p class="text-xs text-slate-400 mt-2" id="totalCardSub">Grand Total</p>
                             </div>
                         </div>
 
@@ -1814,6 +1812,8 @@
                         ? Math.round(totalValidEfficiencies / numValidEfficiencies)
                         : 0;
 
+                    let displayEfficiency = efficiency;
+
                     // Critical issues (overdue or high deviation)
                     const critical = data.filter(c => {
                         const actual = calculateActualCOPT(c);
@@ -1825,20 +1825,40 @@
                     // Update DOM
                     const filteredTotal = data.length;
                     const absoluteTotal = allChangeovers.length;
-
                     const totalElement = document.getElementById('totalChangeovers');
-                    totalElement.textContent = filteredTotal;
 
-                    // Add hover tooltip for clarity
-                    if (filteredTotal < absoluteTotal) {
-                        totalElement.title = `${filteredTotal} of ${absoluteTotal} records shown (filters active)`;
+                    // If a single QCO is selected, adapt Card 1 to show Actual COPT
+                    const isSingleQCO = (currentQCOFilter !== 'all' && data.length === 1);
+                    const titleEl = document.getElementById('totalCardTitle');
+                    const subEl = document.getElementById('totalCardSub');
+
+                    if (isSingleQCO) {
+                        const singleQCO = data[0];
+                        const singleActual = calculateActualCOPT(singleQCO);
+                        const singleTarget = calculateTargetCOPT(singleQCO);
+
+                        if (titleEl) titleEl.textContent = 'Actual COPT';
+                        if (subEl) subEl.textContent = `QCO #${singleQCO.qcoNumber || 'N/A'}`;
+                        totalElement.textContent = singleActual > 0 ? `${singleActual}m` : '-';
+                        totalElement.title = `Actual Changeover Time: ${singleActual} min`;
+
+                        if (numValidEfficiencies === 0 && singleTarget > 0 && singleActual > 0) {
+                            displayEfficiency = calculateEfficiency(singleTarget, singleActual);
+                        }
                     } else {
-                        totalElement.title = `Showing all ${absoluteTotal} records`;
+                        if (titleEl) titleEl.textContent = 'Total Changeovers';
+                        if (subEl) subEl.textContent = 'Grand Total';
+                        totalElement.textContent = filteredTotal;
+                        if (filteredTotal < absoluteTotal) {
+                            totalElement.title = `${filteredTotal} of ${absoluteTotal} records shown (filters active)`;
+                        } else {
+                            totalElement.title = `Showing all ${absoluteTotal} records`;
+                        }
                     }
 
                     document.getElementById('targetCOPT').textContent = avgTargetCOPT || '-';
-                    document.getElementById('efficiencyScore').textContent = efficiency + '%';
-                    document.getElementById('efficiencyBar').style.width = Math.min(efficiency, 100) + '%';
+                    document.getElementById('efficiencyScore').textContent = displayEfficiency + '%';
+                    document.getElementById('efficiencyBar').style.width = Math.min(displayEfficiency, 100) + '%';
                     document.getElementById('pendingTasks').textContent = critical;
 
                     // Update Target COPT badge
@@ -1972,7 +1992,7 @@
                     const actual = qco.actualCOPT || calculateActualCOPT(qco);
                     const target = qco.targetCOPT || calculateTargetCOPT(qco);
 
-                    const duration = actual > 0 ? `${actual} min` : '-';
+                    const duration = actual > 0 ? `${(Math.round(actual * 10) / 10)} min` : '-';
                     const efficiency = calculateEfficiency(target, actual);
 
                     tr.innerHTML = `
@@ -2066,12 +2086,20 @@
 
                         // Calculate elapsed time
                         let elapsed = 0;
+                        let startTime = null;
                         if (qco.startedAt) {
-                            const startTime = qco.startedAt.toDate ? qco.startedAt.toDate() : new Date(qco.startedAt);
-                            elapsed = Math.floor((Date.now() - startTime.getTime()) / 60000);
-                        } else if (qco.createdAt) {
-                            const createdTime = qco.createdAt.toDate ? qco.createdAt.toDate() : new Date(qco.createdAt);
-                            elapsed = Math.floor((Date.now() - createdTime.getTime()) / 60000);
+                            startTime = qco.startedAt.toDate ? qco.startedAt.toDate() : new Date(qco.startedAt);
+                        } else if (qco.operationTimings && typeof qco.operationTimings === 'object') {
+                            const starts = Object.values(qco.operationTimings)
+                                .map(t => t.start ? new Date(t.start).getTime() : null)
+                                .filter(t => t && !isNaN(t));
+                            if (starts.length > 0) startTime = new Date(Math.min(...starts));
+                        }
+                        if (!startTime && qco.createdAt) {
+                            startTime = qco.createdAt.toDate ? qco.createdAt.toDate() : new Date(qco.createdAt);
+                        }
+                        if (startTime && !isNaN(startTime.getTime())) {
+                            elapsed = Math.max(0, Math.floor((Date.now() - startTime.getTime()) / 60000));
                         }
 
                         return `
@@ -2652,12 +2680,17 @@
                     const qco = allChangeovers.find(c => c.id === id);
                     if (!qco) return;
 
+                    const actualCOPT = qco.actualCOPT || calculateActualCOPT(qco);
+                    const targetCOPT = qco.targetCOPT || calculateTargetCOPT(qco);
+                    const timings = (qco.operationTimings && typeof qco.operationTimings === 'object') ? qco.operationTimings : {};
+                    const ops = Object.entries(timings);
+
                     document.getElementById('modalTitle').textContent = `QCO #${qco.qcoNumber}`;
-                    document.getElementById('modalSubtitle').textContent = `Created on ${qco.createdAt ? new Date(qco.createdAt.toDate()).toLocaleString() : 'Unknown'}`;
+                    document.getElementById('modalSubtitle').textContent = `Created on ${qco.createdAt ? (qco.createdAt.toDate ? qco.createdAt.toDate().toLocaleString() : new Date(qco.createdAt).toLocaleString()) : 'Unknown'}`;
 
                     const content = document.getElementById('modalContent');
                     content.innerHTML = `
-                <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="grid grid-cols-2 gap-4 mb-4">
                     <div class="bg-slate-50 p-4 rounded-xl">
                         <p class="text-xs text-slate-500 uppercase mb-1">Current Style</p>
                         <p class="font-semibold text-slate-900">${qco.currentStyle || 'N/A'}</p>
@@ -2675,6 +2708,48 @@
                         <span class="badge ${getStatusColor(deriveQCOStatus(qco))}">${deriveQCOStatus(qco)}</span>
                     </div>
                 </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-blue-50/70 p-4 rounded-xl border border-blue-100">
+                        <p class="text-xs text-blue-600 font-bold uppercase mb-1">Target COPT</p>
+                        <p class="text-2xl font-bold text-blue-900">${targetCOPT > 0 ? targetCOPT + ' min' : '-'}</p>
+                    </div>
+                    <div class="bg-emerald-50/70 p-4 rounded-xl border border-emerald-100">
+                        <p class="text-xs text-emerald-600 font-bold uppercase mb-1">Actual COPT</p>
+                        <p class="text-2xl font-bold text-emerald-900">${actualCOPT > 0 ? actualCOPT + ' min' : '-'}</p>
+                    </div>
+                </div>
+
+                ${ops.length > 0 ? `
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-semibold text-slate-900">Operation Timings</h4>
+                        <span class="text-xs text-slate-400">${ops.length} Operations</span>
+                    </div>
+                    <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        ${ops.map(([name, t]) => {
+                            let dur = Number(t.actualTime);
+                            if (isNaN(dur) || dur <= 0) {
+                                if (t.start && t.end) dur = Math.round((new Date(t.end) - new Date(t.start)) / 60000);
+                                else dur = 0;
+                            }
+                            const status = t.end ? 'Completed' : (t.start ? 'Running' : 'Pending');
+                            const statusClass = t.end ? 'text-emerald-600 font-bold' : (t.start ? 'text-amber-600 font-bold' : 'text-slate-400');
+                            return `
+                            <div class="flex justify-between items-center p-2.5 bg-slate-50 rounded-lg text-xs hover:bg-slate-100 transition-colors">
+                                <div class="min-w-0 pr-2">
+                                    <p class="font-medium text-slate-800 truncate">${name}</p>
+                                    <p class="text-[10px] text-slate-400">${t.department || 'Maintenance'}</p>
+                                </div>
+                                <div class="text-right flex-shrink-0">
+                                    <p class="${statusClass}">${dur > 0 ? `${dur} min` : status}</p>
+                                </div>
+                            </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                ` : ''}
 
                 ${qco.machineSummary ? `
                 <div class="mb-6">
@@ -2704,10 +2779,13 @@
                 ` : ''}
 
                 <div class="flex gap-3 mt-6 pt-6 border-t border-slate-200">
-                    <button onclick="editQCO('${qco.id}')" class="flex-1 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors">
-                        Edit QCO
+                    <button onclick="window.location.href='summary.html?qco=${qco.id}'" class="flex-1 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> View Summary Report
                     </button>
-                    <button onclick="deleteQCO('${qco.id}')" class="px-6 py-3 rounded-xl bg-red-50 text-red-600 font-semibold hover:bg-red-100 transition-colors">
+                    <button onclick="editQCO('${qco.id}')" class="px-5 py-3 rounded-xl bg-blue-50 text-blue-600 font-semibold hover:bg-blue-100 transition-colors">
+                        Edit
+                    </button>
+                    <button onclick="deleteQCO('${qco.id}')" class="px-5 py-3 rounded-xl bg-red-50 text-red-600 font-semibold hover:bg-red-100 transition-colors">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
                     </button>
                 </div>
@@ -3735,7 +3813,64 @@
                 }
 
                 function renderCOPTChart(data) {
-                    // Group by date, but ensure unique QCOs per day (handling potential duplicates)
+                    // When a single QCO is selected, display an operation breakdown chart
+                    if (currentQCOFilter !== 'all' && data.length === 1) {
+                        const qco = data[0];
+                        const timings = (qco.operationTimings && typeof qco.operationTimings === 'object') ? qco.operationTimings : {};
+                        const ops = (qco.operationsList && qco.operationsList.length)
+                            ? qco.operationsList
+                            : Object.keys(timings);
+
+                        const opLabels = [];
+                        const actualData = [];
+                        const standardData = [];
+
+                        ops.forEach(op => {
+                            const name = typeof op === 'string' ? op : (op.name || 'Op');
+                            const timing = timings[name] || {};
+                            let act = Number(timing.actualTime);
+                            if (isNaN(act) || act <= 0) {
+                                if (timing.start && timing.end) act = (new Date(timing.end) - new Date(timing.start)) / 60000;
+                                else act = 0;
+                            }
+                            let std = 0;
+                            if (typeof op === 'object' && op.smv != null) {
+                                std = Number(op.smv) * 10;
+                            } else if (timing.standardTime != null) {
+                                std = Number(timing.standardTime);
+                            }
+
+                            const shortName = name.length > 18 ? name.slice(0, 16) + '...' : name;
+                            opLabels.push(shortName);
+                            actualData.push(act > 0 ? Math.round(act * 10) / 10 : 0);
+                            standardData.push(std > 0 ? Math.round(std * 10) / 10 : 0);
+                        });
+
+                        performanceChart.config.type = 'bar';
+                        performanceChart.data = {
+                            labels: opLabels,
+                            datasets: [
+                                {
+                                    label: 'Actual (min)',
+                                    data: actualData,
+                                    backgroundColor: '#0ea5e9',
+                                    borderRadius: 6
+                                },
+                                {
+                                    label: 'Allowed (min)',
+                                    data: standardData,
+                                    backgroundColor: '#10b981',
+                                    borderRadius: 6
+                                }
+                            ]
+                        };
+                        performanceChart.options.scales.y.title = { display: true, text: 'Minutes' };
+                        performanceChart.update();
+                        return;
+                    }
+
+                    // Otherwise, render multi-changeover line chart
+                    performanceChart.config.type = 'line';
                     const grouped = {};
                     data.forEach(qco => {
                         if (!qco.createdAt) return;
@@ -4026,8 +4161,10 @@
 
                         if (!lineData[line]) lineData[line] = { count: 0, totalCOPT: 0, totalTarget: 0 };
                         lineData[line].count++;
-                        if (qco.actualCOPT) lineData[line].totalCOPT += Number(qco.actualCOPT) || 0;
-                        if (qco.targetCOPT) lineData[line].totalTarget += Number(qco.targetCOPT) || 0;
+                        const actual = qco.actualCOPT || calculateActualCOPT(qco);
+                        const target = qco.targetCOPT || calculateTargetCOPT(qco);
+                        if (actual > 0) lineData[line].totalCOPT += Number(actual);
+                        if (target > 0) lineData[line].totalTarget += Number(target);
                     });
 
                     const lines = Object.entries(lineData)
@@ -4426,17 +4563,28 @@
                  * @returns {number} Total duration in minutes
                  */
                 function calculateActualCOPT(qco) {
+                    if (qco.actualCOPT !== undefined && qco.actualCOPT !== null && !isNaN(Number(qco.actualCOPT))) {
+                        return Math.round(Number(qco.actualCOPT) * 10) / 10;
+                    }
+
                     if (!qco.operationTimings || typeof qco.operationTimings !== 'object') {
                         return 0;
                     }
 
                     let total = 0;
                     Object.values(qco.operationTimings).forEach(details => {
-                        const duration = Number(details.actualTime) || Number(details.duration) || 0;
+                        let duration = Number(details.actualTime) || Number(details.duration) || 0;
+                        if (!duration && details.start && details.end) {
+                            const s = new Date(details.start).getTime();
+                            const e = new Date(details.end).getTime();
+                            if (!isNaN(s) && !isNaN(e) && e > s) {
+                                duration = (e - s) / 60000;
+                            }
+                        }
                         total += duration;
                     });
 
-                    return total;
+                    return Math.round(total * 10) / 10;
                 }
 
                 /**

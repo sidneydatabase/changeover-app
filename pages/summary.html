@@ -1278,12 +1278,18 @@
 
                 updateQCOSelector(selectedLine);
 
-                // Auto-load if there's a saved QCO
-                const currentSaved = localStorage.getItem('currentQCOId');
-                if (currentSaved && allQCOs.find(q => q.id === currentSaved)) {
-                    currentQCOId = currentSaved;
-                    filterState.lastSingleQCO = currentSaved;
-                    document.getElementById('qcoSelector').value = currentSaved;
+                // Auto-load if there's a URL parameter (?qco=ID) or saved QCO
+                const urlParams = new URLSearchParams(window.location.search);
+                const qcoFromUrl = urlParams.get('qco');
+                const targetQCOId = (qcoFromUrl && allQCOs.find(q => q.id === qcoFromUrl))
+                    ? qcoFromUrl
+                    : localStorage.getItem('currentQCOId');
+
+                if (targetQCOId && allQCOs.find(q => q.id === targetQCOId)) {
+                    currentQCOId = targetQCOId;
+                    filterState.lastSingleQCO = targetQCOId;
+                    localStorage.setItem('currentQCOId', targetQCOId);
+                    document.getElementById('qcoSelector').value = targetQCOId;
                     await generateReport();
                 }
 
@@ -1567,15 +1573,23 @@
                 // Process Operations
                 if (data.operationTimings) {
                     Object.entries(data.operationTimings).forEach(([name, details]) => {
-                        if (details.actualTime) {
-                            // Re-calculate net time if start/end exist, to ensure consistency with latest schedule
-                            let finalActualTime = parseFloat(details.actualTime);
-
-                            if (details.start && details.end && currentLineSchedule) {
-                                const netMins = getNetDuration(details.start, details.end, currentLineSchedule);
-                                finalActualTime = parseFloat(netMins.toFixed(2));
+                        let finalActualTime = parseFloat(details.actualTime);
+                        if (isNaN(finalActualTime) || finalActualTime <= 0) {
+                            if (details.start && details.end) {
+                                if (currentLineSchedule) {
+                                    finalActualTime = parseFloat(getNetDuration(details.start, details.end, currentLineSchedule).toFixed(2));
+                                } else {
+                                    finalActualTime = parseFloat(((new Date(details.end) - new Date(details.start)) / 60000).toFixed(2));
+                                }
+                            } else {
+                                finalActualTime = 0;
                             }
+                        } else if (details.start && details.end && currentLineSchedule) {
+                            const netMins = getNetDuration(details.start, details.end, currentLineSchedule);
+                            finalActualTime = parseFloat(netMins.toFixed(2));
+                        }
 
+                        if (finalActualTime > 0 || (details.start && details.end)) {
                             currentReportData.operations.push({
                                 name: name,
                                 dept: details.department || 'MAINTENANCE',
@@ -1822,8 +1836,12 @@
                     const overallStart = Math.min(...starts);
                     const overallEnd = Math.max(...ends);
 
-                    // Calculate time accounting for working hours only (7:30 AM - 5:30 PM)
-                    totalTime = calculateWorkingHoursOnly(overallStart, overallEnd);
+                    // If schedule is available, use getNetDuration to deduct breaks consistently with operations
+                    if (currentLineSchedule) {
+                        totalTime = getNetDuration(new Date(overallStart).toISOString(), new Date(overallEnd).toISOString(), currentLineSchedule);
+                    } else {
+                        totalTime = calculateWorkingHoursOnly(overallStart, overallEnd);
+                    }
 
                     console.log('⏱️ Time Calculation:', {
                         overallStart: new Date(overallStart).toLocaleString('en-GB'),
